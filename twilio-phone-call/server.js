@@ -368,21 +368,23 @@ async function getSummary(callSid, req) {
       return twiml.toString();
     }
 
-    // Ask user for subject
-    twiml.say(
-      'Please tell me the subject you need to summarize.',
-      { voice: 'Polly.Joanna', language: 'en-US' }
+    const gather = twiml.gather({
+      action: `${process.env.BASE_URL}/ivr/summary-menu`,
+      numDigits: '1',
+      method: 'POST',
+      timeout: 6
+    });
+
+    gather.say(
+      'Choose the subject for your learning summary. Press 1 for Physics, 2 for Chemistry, 3 for Biology, 4 for Math, or 5 for Other.',
+      { voice: 'Polly.Joanna', language: 'en-US', loop: 2 }
     );
 
-    // Record the subject name
-    twiml.record({
-      action: `${process.env.BASE_URL}/ivr/process-summary`,
-      method: 'POST',
-      maxLength: 10,
-      finishOnKey: '#',
-      transcribe: false,
-      playBeep: true
-    });
+    twiml.say(
+      'No selection received. Returning to the main menu.',
+      { voice: 'Polly.Joanna', language: 'en-US' }
+    );
+    twiml.redirect(`${process.env.BASE_URL}/ivr/welcome`);
 
   } catch (error) {
     console.error('Error in getSummary:', error);
@@ -396,11 +398,10 @@ async function getSummary(callSid, req) {
   return twiml.toString();
 }
 
-// Process summary request
-app.post('/ivr/process-summary', async (req, res) => {
+app.post('/ivr/summary-menu', async (req, res) => {
   const callSid = req.body.CallSid;
-  const recordingUrl = req.body.RecordingUrl;
-  console.log(`📊 Processing summary request for call: ${callSid}`);
+  const digit = req.body.Digits;
+  console.log(`📊 Summary subject selection: ${digit} (Call: ${callSid})`);
 
   const session = userSessions.get(callSid) || {};
   const fromNumber = session.fromNumber || req.body.From;
@@ -408,31 +409,9 @@ app.post('/ivr/process-summary', async (req, res) => {
   const twiml = new VoiceResponse();
 
   try {
-    // Transcribe the subject name
-    let subjectName = 'Physics'; // Default fallback
-    
-    if (recordingUrl) {
-      try {
-        const transcribedText = await transcribeAudio(recordingUrl, callSid);
-        console.log(`📝 Subject name transcribed: "${transcribedText}"`);
-        
-        // Extract just the subject name (remove phrases like "give me summary", "I want summary", etc.)
-        subjectName = extractSubjectName(transcribedText);
-        console.log(`📚 Extracted subject: "${subjectName}"`);
-      } catch (error) {
-        console.error('❌ Error transcribing subject:', error.message);
-      }
-    }
-
-    // Fetch last 5 questions for this subject (exclude summary requests)
-    console.log(`🔍 Fetching history for subject: ${subjectName}`);
-    const history = await getHistoryBySubject(fromNumber, subjectName, 5);
-    
-    console.log(`📊 Found ${history.length} questions for ${subjectName}`);
-
-    if (history.length === 0) {
+    if (!isConnected()) {
       twiml.say(
-        `You have not asked any questions about ${subjectName} yet. Please ask some questions first, then request a summary.`,
+        'Sorry, database service is not available. This feature requires database connection.',
         { voice: 'Polly.Joanna', language: 'en-US' }
       );
       twiml.redirect(`${process.env.BASE_URL}/ivr/welcome`);
@@ -441,16 +420,52 @@ app.post('/ivr/process-summary', async (req, res) => {
       return;
     }
 
-    // Generate summary using Gemini
-    console.log(`🤖 Generating summary for ${subjectName} with ${history.length} questions...`);
-    const summary = await generateSummary(subjectName, history);
-    console.log(`📊 Summary generated successfully`);
+    if (!isGeminiInitialized()) {
+      twiml.say(
+        'Sorry, AI service is not configured. Please add your Gemini API key to the environment file.',
+        { voice: 'Polly.Joanna', language: 'en-US' }
+      );
+      twiml.redirect(`${process.env.BASE_URL}/ivr/welcome`);
+      res.type('text/xml');
+      res.send(twiml.toString());
+      return;
+    }
 
-    // Convert summary to speech
+    const subject = mapDigitToSubject(digit);
+
+    if (!subject) {
+      twiml.say(
+        'Invalid selection. Please press 4 again and choose a subject between 1 and 5.',
+        { voice: 'Polly.Joanna', language: 'en-US' }
+      );
+      twiml.redirect(`${process.env.BASE_URL}/ivr/welcome`);
+      res.type('text/xml');
+      res.send(twiml.toString());
+      return;
+    }
+
+    console.log(`🔍 Fetching history for subject: ${subject}`);
+    const history = await getHistoryBySubject(fromNumber, subject, 5);
+    console.log(`📊 Found ${history.length} entries for ${subject}`);
+
+    if (history.length === 0) {
+      twiml.say(
+        `You have not asked any questions about ${subject} yet. Please ask some questions first, then request a summary.`,
+        { voice: 'Polly.Joanna', language: 'en-US' }
+      );
+      twiml.redirect(`${process.env.BASE_URL}/ivr/welcome`);
+      res.type('text/xml');
+      res.send(twiml.toString());
+      return;
+    }
+
+    const summary = await generateSummary(subject, history);
+    console.log(`📊 Summary generated successfully for ${subject}`);
+
     const audioFileName = await textToSpeechConvert(summary, callSid);
 
     twiml.say(
-      `Here is your learning summary for ${subjectName}, based on your last ${history.length} questions.`,
+      `Here is your learning summary for ${subject}, based on your last ${history.length} questions.`,
       { voice: 'Polly.Joanna', language: 'en-US' }
     );
 
@@ -463,7 +478,6 @@ app.post('/ivr/process-summary', async (req, res) => {
       twiml.say(summary, { voice: 'Polly.Joanna', language: 'en-US' });
     }
 
-    // Offer next options
     const gather = twiml.gather({
       action: `${process.env.BASE_URL}/ivr/menu`,
       numDigits: '1',
@@ -477,7 +491,7 @@ app.post('/ivr/process-summary', async (req, res) => {
     );
 
   } catch (error) {
-    console.error('❌ Error processing summary:', error);
+    console.error('❌ Error processing summary selection:', error);
     twiml.say(
       'Sorry, I encountered an error generating your summary. Please try again.',
       { voice: 'Polly.Joanna', language: 'en-US' }
@@ -489,24 +503,16 @@ app.post('/ivr/process-summary', async (req, res) => {
   res.send(twiml.toString());
 });
 
-// Helper function to extract subject name from transcribed text
-function extractSubjectName(text) {
-  // Remove common phrases that might be in the transcription
-  const cleanText = text
-    .toLowerCase()
-    .replace(/give me (?:the )?summary/gi, '')
-    .replace(/i want (?:a )?summary/gi, '')
-    .replace(/summary (?:of|on|for|about)/gi, '')
-    .replace(/(?:uh|um|ah|er)/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/[.,!?;:]+$/g, '');  // Remove trailing punctuation
-  
-  // Capitalize first letter of each word
-  return cleanText
-    .split(' ')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ') || 'Physics';
+function mapDigitToSubject(digit) {
+  const subjectMap = {
+    '1': 'Physics',
+    '2': 'Chemistry',
+    '3': 'Biology',
+    '4': 'Math',
+    '5': 'Other'
+  };
+
+  return subjectMap[digit] || null;
 }
 
 // Return to main menu

@@ -53,7 +53,7 @@ twilio-phone-call/
 │   ├── /ivr/welcome                # Entry point endpoint
 │   ├── /ivr/menu                   # Menu handler
 │   ├── /ivr/question-recorded      # Recording callback
-│   ├── /ivr/process-summary        # Summary generation
+│   ├── /ivr/summary-menu           # Summary generation via keypad
 │   └── /health                     # Health check
 │
 ├── 📄 server_old_backup.js         # Backup of old monolithic server

@@ -10,10 +10,9 @@ const { getDatabase } = require('../database/connection');
  * @typedef {Object} HistoryDocument
  * @property {string} user_id - User's phone number (caller's number, not Twilio number)
  * @property {string} subject - Question subject (automatically classified: Math, Physics, Chemistry, Biology, History, Geography, Computer Science, English, Economics, Political Science, Environmental Science, General Knowledge, etc.)
- * @property {Array<string>} qs - Array of all questions asked on this subject by this user
- * @property {string} question - Latest question text
- * @property {string} response - Latest AI-generated response
- * @property {Date} timestamp - When last updated
+ * @property {string} question - User's question text
+ * @property {string} response - AI-generated response
+ * @property {Date} timestamp - When the interaction happened
  */
 
 class History {
@@ -164,7 +163,6 @@ class History {
     return {
       user_id: userId,
       subject: subject,
-      qs: [question],
       question: question,
       response: response,
       timestamp: new Date()
@@ -187,18 +185,8 @@ class History {
       throw new Error('Database not connected');
     }
 
-    return await collection.updateOne(
-      { user_id: userId, subject: subject },
-      {
-        $push: { qs: question },
-        $set: {
-          question: question,
-          response: response,
-          timestamp: new Date()
-        }
-      },
-      { upsert: true }
-    );
+    const document = this.createDocument(userId, subject, question, response);
+    return await collection.insertOne(document);
   }
 
   /**
@@ -207,18 +195,22 @@ class History {
    * @param {string} subject - Subject name
    * @returns {Promise<Array<string>>} Array of questions
    */
-  static async getQuestionsBySubject(userId, subject) {
+  static async getQuestionsBySubject(userId, subject, limit = 50) {
     const collection = this.getCollection();
     if (!collection) {
       return [];
     }
 
-    const doc = await collection.findOne({ 
-      user_id: userId, 
-      subject: { $regex: new RegExp(`^${subject}$`, 'i') }
-    });
+    const docs = await collection
+      .find({ 
+        user_id: userId, 
+        subject: { $regex: new RegExp(subject, 'i') }
+      })
+      .sort({ timestamp: -1 })
+      .limit(limit)
+      .toArray();
 
-    return doc ? doc.qs || [] : [];
+    return docs.map(doc => doc.question);
   }
 }
 

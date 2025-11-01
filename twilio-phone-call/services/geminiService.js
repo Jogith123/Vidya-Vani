@@ -67,50 +67,65 @@ async function generateAnswer(question) {
  * @param {string} question - User's question
  * @returns {Promise<string>} Subject category (specific school-level subject)
  */
+const SUBJECT_LABELS = ['Physics', 'Chemistry', 'Biology', 'Math', 'Other'];
+
+function normalizeSubjectCategory(value) {
+  if (!value) {
+    return 'Other';
+  }
+
+  const trimmed = value.trim().toLowerCase();
+
+  if (!trimmed) {
+    return 'Other';
+  }
+
+  const directMatch = SUBJECT_LABELS.find(subject => subject.toLowerCase() === trimmed);
+  if (directMatch) {
+    return directMatch;
+  }
+
+  if (trimmed.includes('phys')) {
+    return 'Physics';
+  }
+
+  if (trimmed.includes('chem')) {
+    return 'Chemistry';
+  }
+
+  if (trimmed.includes('bio')) {
+    return 'Biology';
+  }
+
+  if (trimmed.includes('math') || trimmed.includes('algebra') || trimmed.includes('geometry') || trimmed.includes('calculus')) {
+    return 'Math';
+  }
+
+  return 'Other';
+}
+
 async function classifySubject(question) {
   if (!model) {
-    return 'General';
+    return 'Other';
   }
 
   try {
     const classifyPrompt = `
-You are an educational subject classifier. Analyze this question and identify the specific school-level subject it belongs to.
+Classify this question into one school subject category (Physics, Chemistry, Biology, Math, or Other):
+"${question}"
+Return only the category name.
+`;
 
-Question: "${question}"
-
-Common school subjects include:
-- Mathematics (Algebra, Geometry, Trigonometry, Calculus, Statistics)
-- Physics
-- Chemistry (Organic Chemistry, Inorganic Chemistry)
-- Biology (Botany, Zoology, Human Biology)
-- English (Grammar, Literature, Composition)
-- History (World History, Indian History, Ancient History)
-- Geography
-- Computer Science (Programming, IT)
-- Economics
-- Political Science
-- Social Studies
-- Environmental Science
-- General Science
-
-Instructions:
-1. Identify the SPECIFIC subject name (e.g., "History" not "Other", "Geography" not "Social Studies")
-2. Return ONLY the subject name, nothing else
-3. Use proper capitalization (e.g., "World History", "Computer Science")
-4. If it's a general knowledge question, return "General Knowledge"
-5. Be specific - don't use "Other" unless absolutely necessary
-
-Subject:`;
-    
     const result = await model.generateContent(classifyPrompt);
     const response = await result.response;
-    const subject = response.text().trim();
-    
-    console.log(`📚 Classified subject: ${subject}`);
+    const rawSubject = response.text().trim();
+    const subject = normalizeSubjectCategory(rawSubject);
+
+    console.log(`📚 Classified subject (raw: ${rawSubject}) => ${subject}`);
     return subject;
   } catch (error) {
     console.error('❌ Error classifying subject:', error.message);
-    return 'General';
+    return 'Other';
   }
 }
 
