@@ -2,13 +2,14 @@ require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const VoiceResponse = require('twilio').twiml.VoiceResponse;
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+const textToSpeech = require('@google-cloud/text-to-speech');
+const speech = require('@google-cloud/speech');
+const axios = require('axios');
+const fs = require('fs');
 const path = require('path');
-
-// Import modular services
-const { connectToMongoDB, closeConnection, isConnected } = require('./database/connection');
-const { initializeGemini, isInitialized: isGeminiInitialized, generateAnswer, generateSummary } = require('./services/geminiService');
-const { initializeTTS, initializeSTT, textToSpeechConvert, transcribeAudio } = require('./services/speechService');
-const { storeQuestionAndAnswer, getHistoryBySubject } = require('./services/historyService');
+const util = require('util');
+const { MongoClient } = require('mongodb');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -18,24 +19,82 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 app.use('/audio', express.static(path.join(__dirname, 'audio')));
 
-// Initialize all services
-async function initializeServices() {
-  console.log('🚀 Initializing Vidya Vani services...\n');
-  
-  // Initialize Gemini AI
-  initializeGemini();
-  
-  // Initialize Google TTS
-  initializeTTS();
-  
-  // Initialize Google STT
-  initializeSTT();
-  
-  // Initialize MongoDB
-  await connectToMongoDB();
-  
-  console.log('\n✅ All services initialized\n');
+// Initialize Gemini AI
+let genAI = null;
+let model = null;
+try {
+  if (process.env.GEMINI_API_KEY) {
+    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    // Using Gemini 2.5 Flash - the free tier model
+    model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    console.log('✅ Gemini AI initialized (using gemini-2.5-flash - Free Tier)');
+  } else {
+    console.log('⚠️  GEMINI_API_KEY not found in .env');
+  }
+} catch (error) {
+  console.log('⚠️  Gemini AI initialization failed:', error.message);
 }
+
+// Initialize Google Text-to-Speech (optional)
+let ttsClient = null;
+try {
+  if (fs.existsSync(process.env.GOOGLE_TTS_KEY_FILE || './google-credentials.json')) {
+    ttsClient = new textToSpeech.TextToSpeechClient({
+      keyFilename: process.env.GOOGLE_TTS_KEY_FILE || './google-credentials.json'
+    });
+    console.log('✅ Google TTS initialized');
+  } else {
+    console.log('⚠️  Google TTS credentials not found - using Twilio TTS fallback');
+  }
+} catch (error) {
+  console.log('⚠️  Google TTS initialization failed - using Twilio TTS fallback');
+  ttsClient = null;
+}
+
+// Initialize Google Speech-to-Text (optional)
+let sttClient = null;
+try {
+  if (fs.existsSync(process.env.GOOGLE_TTS_KEY_FILE || './google-credentials.json')) {
+    sttClient = new speech.SpeechClient({
+      keyFilename: process.env.GOOGLE_TTS_KEY_FILE || './google-credentials.json'
+    });
+    console.log('✅ Google Speech-to-Text initialized');
+  } else {
+    console.log('⚠️  Google STT credentials not found - using Twilio transcription fallback');
+  }
+} catch (error) {
+  console.log('⚠️  Google STT initialization failed - using Twilio transcription fallback');
+  sttClient = null;
+}
+
+// Initialize MongoDB
+let db = null;
+let mongoClient = null;
+
+async function connectToMongoDB() {
+  try {
+    if (!process.env.MONGODB_URI) {
+      console.log('⚠️  MONGODB_URI not found in .env - Database features disabled');
+      return;
+    }
+
+    mongoClient = new MongoClient(process.env.MONGODB_URI);
+    await mongoClient.connect();
+    db = mongoClient.db();
+    console.log('✅ MongoDB connected successfully');
+    
+    // Create indexes for better query performance
+    await db.collection('history').createIndex({ user_id: 1, timestamp: -1 });
+    await db.collection('history').createIndex({ user_id: 1, subject: 1, timestamp: -1 });
+    console.log('✅ MongoDB indexes created');
+  } catch (error) {
+    console.log('⚠️  MongoDB connection failed:', error.message);
+    db = null;
+  }
+}
+
+// Connect to MongoDB on startup
+connectToMongoDB();
 
 // Store user sessions (in production, use Redis or database)
 const userSessions = new Map();
@@ -68,7 +127,6 @@ app.post('/ivr/welcome', (req, res) => {
     'Press 2 to stop recording. ' +
     'Press 3 to get the answer. ' +
     'Press 4 to get a summary of your last 5 questions on a subject. ' +
-    'Press 5 to stop and return to main menu. ' +
     'Press 9 to end the call.',
     { voice: 'Polly.Joanna', language: 'en-US', loop: 2 }
   );
@@ -88,7 +146,6 @@ app.post('/ivr/menu', async (req, res) => {
     '2': stopRecording,
     '3': getAnswer,
     '4': getSummary,
-    '5': returnToMenu,
     '9': endCall
   };
 
@@ -172,7 +229,7 @@ app.post('/ivr/question-recorded', async (req, res) => {
   userSessions.set(callSid, session);
 
   // Process transcription immediately using Google STT
-  processTranscription(recordingUrl, callSid).catch(err => {
+  transcribeAudio(recordingUrl, callSid).catch(err => {
     console.error(`❌ Transcription error for ${callSid}:`, err);
   });
 
@@ -199,11 +256,59 @@ app.post('/ivr/question-recorded', async (req, res) => {
   res.send(twiml.toString());
 });
 
-// Process transcription asynchronously
-async function processTranscription(recordingUrl, callSid) {
+// Transcribe audio using Google Speech-to-Text
+async function transcribeAudio(recordingUrl, callSid) {
   try {
-    const transcriptionText = await transcribeAudio(recordingUrl, callSid);
+    console.log(`🎙️ Starting transcription for ${callSid}...`);
     
+    // Download the audio file from Twilio
+    const audioResponse = await axios({
+      method: 'get',
+      url: recordingUrl,
+      responseType: 'arraybuffer',
+      auth: {
+        username: process.env.TWILIO_ACCOUNT_SID,
+        password: process.env.TWILIO_AUTH_TOKEN
+      }
+    });
+
+    const audioBuffer = Buffer.from(audioResponse.data);
+    console.log(`📥 Downloaded audio: ${audioBuffer.length} bytes`);
+
+    let transcriptionText = '';
+
+    // Use Google Speech-to-Text if available
+    if (sttClient) {
+      console.log(`🔊 Using Google Speech-to-Text for ${callSid}`);
+      
+      const request = {
+        audio: {
+          content: audioBuffer.toString('base64')
+        },
+        config: {
+          encoding: 'LINEAR16',
+          sampleRateHertz: 8000,
+          languageCode: 'en-US',
+          enableAutomaticPunctuation: true,
+          model: 'phone_call',
+          useEnhanced: true
+        }
+      };
+
+      const [response] = await sttClient.recognize(request);
+      const transcription = response.results
+        .map(result => result.alternatives[0].transcript)
+        .join('\n');
+      
+      transcriptionText = transcription;
+      console.log(`📝 Google STT transcription: "${transcriptionText}"`);
+    } else {
+      // Fallback: Use a simple approach or wait for Twilio transcription
+      console.log(`⚠️ Google STT not available, transcription may be less accurate`);
+      // In this case, we would need to enable Twilio transcription as fallback
+      return;
+    }
+
     // Save transcription to session
     const session = userSessions.get(callSid) || {};
     session.currentQuestion = transcriptionText;
@@ -212,6 +317,7 @@ async function processTranscription(recordingUrl, callSid) {
     userSessions.set(callSid, session);
     
     console.log(`✅ Question saved to session for ${callSid}`);
+
   } catch (error) {
     console.error(`❌ Transcription error for ${callSid}:`, error.message);
     // Set a fallback message
@@ -272,7 +378,7 @@ async function getAnswer(callSid, req) {
 
   try {
     // Check if Gemini AI is available
-    if (!isGeminiInitialized()) {
+    if (!model) {
       twiml.say(
         'Sorry, AI service is not configured. Please add your Gemini API key to the environment file.',
         { voice: 'Polly.Joanna', language: 'en-US' }
@@ -287,8 +393,11 @@ async function getAnswer(callSid, req) {
       { voice: 'Polly.Joanna', language: 'en-US' }
     );
 
+    const prompt = `You are an educational assistant. Answer this question clearly and concisely in 2-3 sentences suitable for voice response: ${question}`;
     console.log(`🤖 Sending to Gemini: ${question}`);
-    const answer = await generateAnswer(question);
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const answer = response.text();
 
     console.log(`🤖 Question: ${question}`);
     console.log(`🤖 Answer: ${answer}`);
@@ -298,9 +407,7 @@ async function getAnswer(callSid, req) {
     userSessions.set(callSid, session);
 
     // Classify subject and store in MongoDB
-    if (isConnected()) {
-      await storeQuestionAndAnswer(session.fromNumber, question, answer);
-    }
+    await storeQuestionAndAnswer(session.fromNumber, question, answer);
 
     // Convert answer to speech using Google TTS
     const audioFileName = await textToSpeechConvert(answer, callSid);
@@ -339,6 +446,119 @@ async function getAnswer(callSid, req) {
   return twiml.toString();
 }
 
+// Convert text to speech using Google TTS
+async function textToSpeechConvert(text, callSid) {
+  // If TTS client is not available, return null to use Twilio TTS
+  if (!ttsClient) {
+    console.log('Using Twilio TTS fallback');
+    return null;
+  }
+
+  try {
+    // Ensure audio directory exists
+    const audioDir = path.join(__dirname, 'audio');
+    if (!fs.existsSync(audioDir)) {
+      fs.mkdirSync(audioDir, { recursive: true });
+    }
+
+    const request = {
+      input: { text: text },
+      voice: {
+        languageCode: 'en-US',
+        name: 'en-US-Neural2-F',
+        ssmlGender: 'FEMALE'
+      },
+      audioConfig: {
+        audioEncoding: 'MP3',
+        speakingRate: 0.95,
+        pitch: 0.0
+      }
+    };
+
+    const [response] = await ttsClient.synthesizeSpeech(request);
+    const fileName = `answer_${callSid}_${Date.now()}.mp3`;
+    const filePath = path.join(audioDir, fileName);
+
+    await util.promisify(fs.writeFile)(filePath, response.audioContent, 'binary');
+    console.log(`Audio content written to file: ${fileName}`);
+
+    // Clean up old audio files (older than 1 hour)
+    cleanupOldAudioFiles(audioDir);
+
+    return fileName;
+  } catch (error) {
+    console.error('Error with Google TTS:', error.message);
+    return null;
+  }
+}
+
+// Clean up old audio files
+function cleanupOldAudioFiles(audioDir) {
+  const files = fs.readdirSync(audioDir);
+  const oneHourAgo = Date.now() - (60 * 60 * 1000);
+
+  files.forEach(file => {
+    const filePath = path.join(audioDir, file);
+    const stats = fs.statSync(filePath);
+    if (stats.mtimeMs < oneHourAgo) {
+      fs.unlinkSync(filePath);
+      console.log(`Deleted old audio file: ${file}`);
+    }
+  });
+}
+
+// Classify subject using Gemini AI
+async function classifySubject(question) {
+  try {
+    if (!model) {
+      return 'Other';
+    }
+
+    const classifyPrompt = `
+Classify this question into one school subject category (Physics, Chemistry, Biology, Math, or Other):
+"${question}"
+Return only the category name.
+`;
+    
+    const result = await model.generateContent(classifyPrompt);
+    const response = await result.response;
+    const subject = response.text().trim();
+    
+    console.log(`📚 Classified subject: ${subject}`);
+    return subject;
+  } catch (error) {
+    console.error('❌ Error classifying subject:', error.message);
+    return 'Other';
+  }
+}
+
+// Store question and answer in MongoDB
+async function storeQuestionAndAnswer(userPhone, question, answer) {
+  try {
+    if (!db) {
+      console.log('⚠️  MongoDB not connected - skipping storage');
+      return;
+    }
+
+    // Classify the subject
+    const subject = await classifySubject(question);
+
+    // Store in database
+    const document = {
+      user_id: userPhone,
+      subject: subject,
+      question: question,
+      response: answer,
+      timestamp: new Date()
+    };
+
+    await db.collection('history').insertOne(document);
+    console.log(`✅ Stored Q&A in MongoDB - Subject: ${subject}`);
+  } catch (error) {
+    console.error('❌ Error storing to MongoDB:', error.message);
+  }
+}
+
 // Get summary of last 5 questions for a subject
 async function getSummary(callSid, req) {
   console.log(`📊 Getting summary for call: ${callSid}`);
@@ -349,7 +569,7 @@ async function getSummary(callSid, req) {
 
   try {
     // Check if MongoDB is available
-    if (!isConnected()) {
+    if (!db) {
       twiml.say(
         'Sorry, database service is not available. This feature requires database connection.',
         { voice: 'Polly.Joanna', language: 'en-US' }
@@ -359,7 +579,7 @@ async function getSummary(callSid, req) {
     }
 
     // Check if Gemini AI is available
-    if (!isGeminiInitialized()) {
+    if (!model) {
       twiml.say(
         'Sorry, AI service is not configured. Please add your Gemini API key to the environment file.',
         { voice: 'Polly.Joanna', language: 'en-US' }
@@ -370,7 +590,7 @@ async function getSummary(callSid, req) {
 
     // Ask user for subject
     twiml.say(
-      'Please tell me the subject you need to summarize.',
+      'Please say the subject name for which you want a summary. For example: Biology, Physics, Chemistry, or Math.',
       { voice: 'Polly.Joanna', language: 'en-US' }
     );
 
@@ -409,30 +629,58 @@ app.post('/ivr/process-summary', async (req, res) => {
 
   try {
     // Transcribe the subject name
-    let subjectName = 'Physics'; // Default fallback
+    let subjectName = 'Biology'; // Default fallback
     
-    if (recordingUrl) {
+    if (sttClient && recordingUrl) {
       try {
-        const transcribedText = await transcribeAudio(recordingUrl, callSid);
-        console.log(`📝 Subject name transcribed: "${transcribedText}"`);
+        const audioResponse = await axios({
+          method: 'get',
+          url: recordingUrl,
+          responseType: 'arraybuffer',
+          auth: {
+            username: process.env.TWILIO_ACCOUNT_SID,
+            password: process.env.TWILIO_AUTH_TOKEN
+          }
+        });
+
+        const audioBuffer = Buffer.from(audioResponse.data);
+        const request = {
+          audio: { content: audioBuffer.toString('base64') },
+          config: {
+            encoding: 'LINEAR16',
+            sampleRateHertz: 8000,
+            languageCode: 'en-US',
+            enableAutomaticPunctuation: true,
+            model: 'phone_call',
+            useEnhanced: true
+          }
+        };
+
+        const [response] = await sttClient.recognize(request);
+        const transcription = response.results
+          .map(result => result.alternatives[0].transcript)
+          .join(' ');
         
-        // Extract just the subject name (remove phrases like "give me summary", "I want summary", etc.)
-        subjectName = extractSubjectName(transcribedText);
-        console.log(`📚 Extracted subject: "${subjectName}"`);
+        subjectName = transcription.trim();
+        console.log(`📝 Subject transcribed: ${subjectName}`);
       } catch (error) {
         console.error('❌ Error transcribing subject:', error.message);
       }
     }
 
-    // Fetch last 5 questions for this subject (exclude summary requests)
-    console.log(`🔍 Fetching history for subject: ${subjectName}`);
-    const history = await getHistoryBySubject(fromNumber, subjectName, 5);
-    
-    console.log(`📊 Found ${history.length} questions for ${subjectName}`);
+    // Fetch last 5 questions for this subject
+    const history = await db.collection('history')
+      .find({ 
+        user_id: fromNumber, 
+        subject: { $regex: new RegExp(subjectName, 'i') }
+      })
+      .sort({ timestamp: -1 })
+      .limit(5)
+      .toArray();
 
     if (history.length === 0) {
       twiml.say(
-        `You have not asked any questions about ${subjectName} yet. Please ask some questions first, then request a summary.`,
+        `You have not asked any questions about ${subjectName} yet. Please ask some questions first.`,
         { voice: 'Polly.Joanna', language: 'en-US' }
       );
       twiml.redirect(`${process.env.BASE_URL}/ivr/welcome`);
@@ -442,19 +690,27 @@ app.post('/ivr/process-summary', async (req, res) => {
     }
 
     // Generate summary using Gemini
-    console.log(`🤖 Generating summary for ${subjectName} with ${history.length} questions...`);
-    const summary = await generateSummary(subjectName, history);
-    console.log(`📊 Summary generated successfully`);
+    const summaryPrompt = `
+Here are the user's previous ${subjectName} questions and answers:
+${history.map((x, i) => `${i + 1}. Q: ${x.question}\nA: ${x.response}`).join('\n\n')}
+
+Give a short and simple summary of what the user has learned so far in ${subjectName}. Keep it under 100 words and suitable for voice response.
+`;
+
+    console.log(`🤖 Generating summary for ${subjectName}...`);
+    const result = await model.generateContent(summaryPrompt);
+    const response = await result.response;
+    const summary = response.text();
+
+    console.log(`📊 Summary generated: ${summary}`);
 
     // Convert summary to speech
     const audioFileName = await textToSpeechConvert(summary, callSid);
 
     twiml.say(
-      `Here is your learning summary for ${subjectName}, based on your last ${history.length} questions.`,
+      `Here is your summary for ${subjectName} based on your last ${history.length} questions.`,
       { voice: 'Polly.Joanna', language: 'en-US' }
     );
-
-    twiml.pause({ length: 1 });
 
     if (audioFileName) {
       const audioUrl = `${process.env.BASE_URL}/audio/${audioFileName}`;
@@ -489,34 +745,6 @@ app.post('/ivr/process-summary', async (req, res) => {
   res.send(twiml.toString());
 });
 
-// Helper function to extract subject name from transcribed text
-function extractSubjectName(text) {
-  // Remove common phrases that might be in the transcription
-  const cleanText = text
-    .toLowerCase()
-    .replace(/give me (?:the )?summary/gi, '')
-    .replace(/i want (?:a )?summary/gi, '')
-    .replace(/summary (?:of|on|for|about)/gi, '')
-    .replace(/(?:uh|um|ah|er)/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/[.,!?;:]+$/g, '');  // Remove trailing punctuation
-  
-  // Capitalize first letter of each word
-  return cleanText
-    .split(' ')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ') || 'Physics';
-}
-
-// Return to main menu
-function returnToMenu(callSid, req) {
-  console.log(`🔄 Returning to main menu for call: ${callSid}`);
-  const twiml = new VoiceResponse();
-  twiml.redirect(`${process.env.BASE_URL}/ivr/welcome`);
-  return twiml.toString();
-}
-
 // End call
 function endCall(callSid, req) {
   const twiml = new VoiceResponse();
@@ -545,14 +773,7 @@ function redirectWelcome() {
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    services: {
-      gemini: isGeminiInitialized(),
-      mongodb: isConnected()
-    }
-  });
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // Error handler for all routes
@@ -567,18 +788,15 @@ app.use((err, req, res, next) => {
 // Graceful shutdown
 process.on('SIGINT', async () => {
   console.log('\n🛑 Shutting down gracefully...');
-  await closeConnection();
+  if (mongoClient) {
+    await mongoClient.close();
+    console.log('✅ MongoDB connection closed');
+  }
   process.exit(0);
 });
 
 // Start server
-async function startServer() {
-  await initializeServices();
-  
-  app.listen(PORT, () => {
-    console.log(`🚀 Server is running on port ${PORT}`);
-    console.log(`📞 Twilio webhook URL: ${process.env.BASE_URL || `http://localhost:${PORT}`}/ivr/welcome`);
-  });
-}
-
-startServer();
+app.listen(PORT, () => {
+  console.log(`🚀 Server is running on port ${PORT}`);
+  console.log(`📞 Twilio webhook URL: ${process.env.BASE_URL || `http://localhost:${PORT}`}/ivr/welcome`);
+});
