@@ -9,6 +9,7 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const util = require('util');
+const CARTESIA_CONFIG = require('./cartesia-config');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -421,22 +422,12 @@ async function textToSpeechConvert(text, callSid) {
     const response = await axios.post(
       'https://api.cartesia.ai/tts/bytes',
       {
-        model_id: 'sonic-3',
+        model_id: CARTESIA_CONFIG.api.model_id,
         transcript: text,
-        voice: {
-          mode: 'id',
-          id: '28ca2041-5dda-42df-8123-f58ea9c3da00' // Natural female voice
-        },
-        output_format: {
-          container: 'wav',
-          encoding: 'pcm_f32le',
-          sample_rate: 44100
-        },
-        speed: 'normal',
-        generation_config: {
-          speed: 1,
-          volume: 1
-        }
+        voice: CARTESIA_CONFIG.voice,
+        output_format: CARTESIA_CONFIG.outputFormat,
+        speed: CARTESIA_CONFIG.api.speed,
+        generation_config: CARTESIA_CONFIG.api.generation_config
       },
       {
         headers: {
