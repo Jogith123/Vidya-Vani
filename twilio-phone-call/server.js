@@ -34,20 +34,11 @@ try {
   console.log('⚠️  Gemini AI initialization failed:', error.message);
 }
 
-// Initialize Google Text-to-Speech (optional)
-let ttsClient = null;
-try {
-  if (fs.existsSync(process.env.GOOGLE_TTS_KEY_FILE || './google-credentials.json')) {
-    ttsClient = new textToSpeech.TextToSpeechClient({
-      keyFilename: process.env.GOOGLE_TTS_KEY_FILE || './google-credentials.json'
-    });
-    console.log('✅ Google TTS initialized');
-  } else {
-    console.log('⚠️  Google TTS credentials not found - using Twilio TTS fallback');
-  }
-} catch (error) {
-  console.log('⚠️  Google TTS initialization failed - using Twilio TTS fallback');
-  ttsClient = null;
+// Initialize Cartesia.ai TTS
+if (process.env.CARTESIA_API_KEY) {
+  console.log('✅ Cartesia.ai TTS initialized');
+} else {
+  console.log('⚠️  CARTESIA_API_KEY not found - using Twilio TTS fallback');
 }
 
 // Initialize Google Speech-to-Text (optional)
@@ -409,11 +400,11 @@ async function getAnswer(callSid, req) {
   return twiml.toString();
 }
 
-// Convert text to speech using Google TTS
+// Convert text to speech using Cartesia.ai
 async function textToSpeechConvert(text, callSid) {
-  // If TTS client is not available, return null to use Twilio TTS
-  if (!ttsClient) {
-    console.log('Using Twilio TTS fallback');
+  // Check if Cartesia API key is available
+  if (!process.env.CARTESIA_API_KEY) {
+    console.log('⚠️ Cartesia API key not found, using Twilio TTS fallback');
     return null;
   }
 
@@ -424,33 +415,55 @@ async function textToSpeechConvert(text, callSid) {
       fs.mkdirSync(audioDir, { recursive: true });
     }
 
-    const request = {
-      input: { text: text },
-      voice: {
-        languageCode: 'en-US',
-        name: 'en-US-Neural2-F',
-        ssmlGender: 'FEMALE'
-      },
-      audioConfig: {
-        audioEncoding: 'MP3',
-        speakingRate: 0.95,
-        pitch: 0.0
-      }
-    };
+    console.log('🎙️ Generating speech with Cartesia.ai...');
 
-    const [response] = await ttsClient.synthesizeSpeech(request);
-    const fileName = `answer_${callSid}_${Date.now()}.mp3`;
+    // Call Cartesia.ai API
+    const response = await axios.post(
+      'https://api.cartesia.ai/tts/bytes',
+      {
+        model_id: 'sonic-3',
+        transcript: text,
+        voice: {
+          mode: 'id',
+          id: '28ca2041-5dda-42df-8123-f58ea9c3da00' // Natural female voice
+        },
+        output_format: {
+          container: 'wav',
+          encoding: 'pcm_f32le',
+          sample_rate: 44100
+        },
+        speed: 'normal',
+        generation_config: {
+          speed: 1,
+          volume: 1
+        }
+      },
+      {
+        headers: {
+          'Cartesia-Version': '2024-06-10',
+          'X-API-Key': process.env.CARTESIA_API_KEY,
+          'Content-Type': 'application/json'
+        },
+        responseType: 'arraybuffer'
+      }
+    );
+
+    const fileName = `answer_${callSid}_${Date.now()}.wav`;
     const filePath = path.join(audioDir, fileName);
 
-    await util.promisify(fs.writeFile)(filePath, response.audioContent, 'binary');
-    console.log(`Audio content written to file: ${fileName}`);
+    await util.promisify(fs.writeFile)(filePath, response.data, 'binary');
+    console.log(`✅ Cartesia audio content written to file: ${fileName}`);
 
     // Clean up old audio files (older than 1 hour)
     cleanupOldAudioFiles(audioDir);
 
     return fileName;
   } catch (error) {
-    console.error('Error with Google TTS:', error.message);
+    console.error('❌ Error with Cartesia TTS:', error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+    }
     return null;
   }
 }

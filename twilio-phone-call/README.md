@@ -53,9 +53,13 @@ The system bridges the digital divide by providing 24/7 educational support to s
          │               │               │
          ▼               ▼               ▼
 ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
-│   GOOGLE     │ │   GOOGLE     │ │   GOOGLE     │
+│   GOOGLE     │ │   GOOGLE     │ │  CARTESIA.AI │
 │ SPEECH-TO-   │ │  GEMINI AI   │ │  TEXT-TO-    │
 │    TEXT      │ │              │ │   SPEECH     │
+│              │ │              │ │              │
+│ Why: 90-95%  │ │ Why: Free    │ │ Why: Natural │
+│ accuracy for │ │ tier, fast   │ │ human-like   │
+│ phone audio  │ │ responses    │ │ voices       │
 └──────────────┘ └──────────────┘ └──────────────┘
 ```
 
@@ -79,13 +83,19 @@ cp .env.example .env
 # Edit .env and add your credentials:
 # - TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN
 # - GEMINI_API_KEY
-# - GOOGLE_TTS_KEY_FILE=./google-credentials.json
+# - CARTESIA_API_KEY (for natural TTS)
+# - GOOGLE_TTS_KEY_FILE=./google-credentials.json (for STT)
 ```
 
 ### **Step 3: Add Google Credentials**
 - Download `google-credentials.json` from Google Cloud Console
 - Place it in the `twilio-phone-call` folder
-- Enable Speech-to-Text and Text-to-Speech APIs
+- Enable Speech-to-Text API (for voice recognition)
+
+### **Step 3.5: Get Cartesia.ai API Key**
+- Sign up at https://cartesia.ai
+- Get your API key and add it to `.env` as `CARTESIA_API_KEY`
+- Test the integration: `node test-cartesia.js`
 
 ### **Step 4: Start ngrok (Terminal 1)**
 ```bash

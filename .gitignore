@@ -1,0 +1,7 @@
+node_modules/
+.env
+*.log
+audio/*.wav
+audio/*.mp3
+google-credentials.json
+.DS_Store
