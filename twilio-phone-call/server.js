@@ -8,7 +8,7 @@ const path = require('path');
 const { connectToMongoDB, closeConnection, isConnected } = require('./database/connection');
 const { initializeGemini, isInitialized: isGeminiInitialized, generateAnswer, generateSummary } = require('./services/geminiService');
 const { initializeTTS, initializeSTT, textToSpeechConvert, transcribeAudio } = require('./services/speechService');
-const { storeQuestionAndAnswer, getHistoryBySubject } = require('./services/historyService');
+const { storeQuestionAndAnswer, getHistoryBySubject, getUserStats } = require('./services/historyService');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -425,12 +425,19 @@ app.post('/ivr/process-summary', async (req, res) => {
     }
 
     // Fetch last 5 questions for this subject (exclude summary requests)
-    console.log(`🔍 Fetching history for subject: ${subjectName}`);
+    console.log(`🔍 Fetching history for subject: "${subjectName}" from user: ${fromNumber}`);
     const history = await getHistoryBySubject(fromNumber, subjectName, 5);
     
-    console.log(`📊 Found ${history.length} questions for ${subjectName}`);
+    console.log(`📊 Found ${history.length} questions for "${subjectName}"`);
+    if (history.length > 0) {
+      console.log(`📋 First question: "${history[0].question.substring(0, 50)}..."`);
+    }
 
     if (history.length === 0) {
+      // Get all available subjects for this user
+      const stats = await getUserStats(fromNumber);
+      console.log(`📚 User's available subjects: ${stats.subjectStats.map(s => s._id).join(', ')}`);
+      
       twiml.say(
         `You have not asked any questions about ${subjectName} yet. Please ask some questions first, then request a summary.`,
         { voice: 'Polly.Joanna', language: 'en-US' }
@@ -492,7 +499,7 @@ app.post('/ivr/process-summary', async (req, res) => {
 // Helper function to extract subject name from transcribed text
 function extractSubjectName(text) {
   // Remove common phrases that might be in the transcription
-  const cleanText = text
+  let cleanText = text
     .toLowerCase()
     .replace(/give me (?:the )?summary/gi, '')
     .replace(/i want (?:a )?summary/gi, '')
@@ -502,11 +509,57 @@ function extractSubjectName(text) {
     .trim()
     .replace(/[.,!?;:]+$/g, '');  // Remove trailing punctuation
   
-  // Capitalize first letter of each word
-  return cleanText
+  if (!cleanText) return 'Physics';
+  
+  // Subject name mapping for common variations
+  const subjectMapping = {
+    'math': 'Mathematics',
+    'maths': 'Mathematics',
+    'mathematics': 'Mathematics',
+    'physics': 'Physics',
+    'chemistry': 'Chemistry',
+    'organic chemistry': 'Organic Chemistry',
+    'inorganic chemistry': 'Inorganic Chemistry',
+    'biology': 'Biology',
+    'botany': 'Botany',
+    'zoology': 'Zoology',
+    'human biology': 'Human Biology',
+    'history': 'History',
+    'world history': 'World History',
+    'indian history': 'Indian History',
+    'ancient history': 'Ancient History',
+    'geography': 'Geography',
+    'english': 'English',
+    'grammar': 'Grammar',
+    'literature': 'Literature',
+    'composition': 'Composition',
+    'computer science': 'Computer Science',
+    'programming': 'Computer Science',
+    'it': 'Computer Science',
+    'economics': 'Economics',
+    'political science': 'Political Science',
+    'social studies': 'Social Studies',
+    'environmental science': 'Environmental Science',
+    'general science': 'General Science',
+    'general knowledge': 'General Knowledge',
+    'science': 'General Science'
+  };
+  
+  // Normalize by checking mapping first
+  const normalized = subjectMapping[cleanText];
+  if (normalized) {
+    console.log(`🔄 Normalized "${text}" to "${normalized}"`);
+    return normalized;
+  }
+  
+  // Capitalize first letter of each word if no mapping found
+  const capitalized = cleanText
     .split(' ')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ') || 'Physics';
+    .join(' ');
+  
+  console.log(`📚 Using capitalized: "${capitalized}"`);
+  return capitalized;
 }
 
 // Return to main menu

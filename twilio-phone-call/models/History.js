@@ -72,10 +72,13 @@ class History {
       return [];
     }
 
+    // Escape special regex characters in subject name
+    const escapedSubject = subject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    
     return await collection
       .find({ 
         user_id: userId, 
-        subject: { $regex: new RegExp(subject, 'i') }
+        subject: { $regex: new RegExp(escapedSubject, 'i') }
       })
       .sort({ timestamp: -1 })
       .limit(limit)
