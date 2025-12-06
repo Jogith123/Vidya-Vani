@@ -98,6 +98,22 @@ class LiveLogsController {
     }
 
     processLog(log) {
+        // Handle structured event types
+        if (log.type === 'pipeline') {
+            this.handlePipelineEvent(log);
+            return; // Don't add to logs, just update pipeline
+        }
+
+        if (log.type === 'network') {
+            this.handleNetworkEvent(log);
+            return; // Don't add to logs, just update network tab
+        }
+
+        if (log.type === 'metrics') {
+            this.handleMetricsEvent(log);
+            return; // Don't add to logs, just update metrics
+        }
+
         // Determine log type based on content
         let type = 'info';
         let message = log.message || log.text || JSON.stringify(log);
@@ -109,12 +125,14 @@ class LiveLogsController {
             type = 'success';
         } else if (log.level === 'warning' || message.includes('⚠️') || message.includes('warning')) {
             type = 'warning';
-        } else if (log.event === 'twilio' || message.includes('📞') || message.includes('Twilio')) {
+        } else if (log.level === 'twilio' || message.includes('📞') || message.includes('Twilio')) {
             type = 'twilio';
         } else if (message.includes('🎤') || message.includes('recording')) {
-            type = 'info';
+            type = 'stt';
         } else if (message.includes('🤖') || message.includes('Gemini') || message.includes('AI')) {
-            type = 'info';
+            type = 'llm';
+        } else if (message.includes('🔊') || message.includes('TTS')) {
+            type = 'tts';
         }
 
         // Check for special events
@@ -129,6 +147,58 @@ class LiveLogsController {
         if (log.latency) {
             this.onLogReceived({ ...log, latency: log.latency });
         }
+    }
+
+    handlePipelineEvent(event) {
+        // Route to pipeline controller via dashboard
+        if (window.dashboard && window.dashboard.pipeline) {
+            const { stage, status } = event;
+
+            if (status === 'active' || status === 'processing') {
+                window.dashboard.pipeline.setStageActive(stage);
+            } else if (status === 'complete') {
+                window.dashboard.pipeline.setStageComplete(stage);
+            } else if (status === 'error') {
+                window.dashboard.pipeline.setStageError(stage);
+            }
+        }
+
+        // Also add a log entry for visibility
+        const stageIcons = { ivr: '📞', stt: '🎤', rag: '📚', llm: '🤖', tts: '🔊', response: '✅' };
+        const icon = stageIcons[event.stage] || '⚡';
+        const duration = event.duration ? ` (${event.duration}ms)` : '';
+        this.addLog(`${icon} ${event.stage.toUpperCase()} → ${event.status}${duration}`, event.stage, true);
+    }
+
+    handleNetworkEvent(event) {
+        // Route to network controller via dashboard
+        if (window.dashboard && window.dashboard.network) {
+            window.dashboard.network.addCall(
+                event.method,
+                event.endpoint,
+                event.status,
+                event.latency
+            );
+        }
+    }
+
+    handleMetricsEvent(event) {
+        // Update metrics on dashboard
+        const metricsMap = {
+            'metric-total-calls': event.totalCalls,
+            'metric-active-sessions': event.activeSessions,
+            'metric-avg-latency': event.avgLatency ? `${event.avgLatency}ms` : '0ms',
+            'metric-stt-accuracy': '--', // Not tracked yet
+            'metric-llm-time': event.llmTime ? `${event.llmTime}ms` : '0ms',
+            'metric-tts-duration': event.ttsTime ? `${event.ttsTime}ms` : '0ms'
+        };
+
+        Object.entries(metricsMap).forEach(([id, value]) => {
+            const el = document.getElementById(id);
+            if (el && value !== undefined) {
+                el.textContent = value;
+            }
+        });
     }
 
     addLog(message, type = 'info', isLive = false) {

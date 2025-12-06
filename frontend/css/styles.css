@@ -9,11 +9,11 @@
     --bg-secondary: #151c2c;
     --bg-tertiary: #1e293b;
     --bg-card: #1a2234;
-    
+
     --text-primary: #f1f5f9;
     --text-secondary: #94a3b8;
     --text-muted: #64748b;
-    
+
     --accent-purple: #6366f1;
     --accent-purple-light: #818cf8;
     --accent-green: #22c55e;
@@ -24,36 +24,36 @@
     --accent-red: #ef4444;
     --accent-yellow: #eab308;
     --accent-cyan: #06b6d4;
-    
+
     /* Borders */
     --border-color: #2d3a4f;
     --border-light: #374155;
-    
+
     /* Shadows */
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
     --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
     --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
     --shadow-glow-purple: 0 0 20px rgba(99, 102, 241, 0.3);
     --shadow-glow-green: 0 0 20px rgba(34, 197, 94, 0.3);
-    
+
     /* Spacing */
     --spacing-xs: 4px;
     --spacing-sm: 8px;
     --spacing-md: 16px;
     --spacing-lg: 24px;
     --spacing-xl: 32px;
-    
+
     /* Border Radius */
     --radius-sm: 6px;
     --radius-md: 10px;
     --radius-lg: 16px;
     --radius-xl: 24px;
-    
+
     /* Transitions */
     --transition-fast: 150ms ease;
     --transition-normal: 250ms ease;
     --transition-slow: 400ms ease;
-    
+
     /* Typography */
     --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
@@ -62,7 +62,9 @@
 /* =====================================
    Reset & Base
    ===================================== */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
@@ -177,8 +179,15 @@ button {
 }
 
 @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
 }
 
 .status-text {
@@ -560,8 +569,15 @@ button {
 }
 
 @keyframes processingPulse {
-    0%, 100% { box-shadow: 0 0 5px rgba(249, 115, 22, 0.3); }
-    50% { box-shadow: 0 0 20px rgba(249, 115, 22, 0.5); }
+
+    0%,
+    100% {
+        box-shadow: 0 0 5px rgba(249, 115, 22, 0.3);
+    }
+
+    50% {
+        box-shadow: 0 0 20px rgba(249, 115, 22, 0.5);
+    }
 }
 
 .stage-icon {
@@ -617,6 +633,32 @@ button {
 
 .stage-indicator.complete {
     background: var(--accent-green);
+}
+
+.stage-indicator.error {
+    background: var(--accent-red);
+    animation: errorPulse 1s infinite;
+}
+
+@keyframes errorPulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 5px rgba(239, 68, 68, 0.3);
+    }
+
+    50% {
+        box-shadow: 0 0 15px rgba(239, 68, 68, 0.6);
+    }
+}
+
+.pipeline-stage.error {
+    border-color: var(--accent-red);
+}
+
+.pipeline-stage.complete {
+    border-color: var(--accent-green);
+    opacity: 0.8;
 }
 
 .pipeline-arrow {
@@ -918,11 +960,11 @@ button {
     .dashboard {
         grid-template-columns: 280px 1fr;
     }
-    
+
     .phone-frame {
         width: 260px;
     }
-    
+
     .metrics-grid {
         grid-template-columns: repeat(2, 1fr);
     }
@@ -933,11 +975,11 @@ button {
         grid-template-columns: 1fr;
         grid-template-rows: auto 1fr;
     }
-    
+
     .phone-simulator {
         order: 2;
     }
-    
+
     .developer-console {
         order: 1;
         max-height: 60vh;

@@ -10,7 +10,7 @@ const { connectToMongoDB, closeConnection, isConnected } = require('./database/c
 const { initializeGemini, isInitialized: isGeminiInitialized, generateAnswer, generateSummary } = require('./services/geminiService');
 const { initializeTTS, initializeSTT, textToSpeechConvert, transcribeAudio } = require('./services/speechService');
 const { storeQuestionAndAnswer, getHistoryBySubject, getUserStats } = require('./services/historyService');
-const { initializeWebSocket, interceptConsole, getMetrics, trackCallStart, trackCallEnd, emitPipelineEvent } = require('./services/logService');
+const { initializeWebSocket, interceptConsole, getMetrics, trackCallStart, trackCallEnd, emitPipelineEvent, emitNetworkEvent, emitMetricsEvent, setStageTime } = require('./services/logService');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -125,9 +125,16 @@ app.post('/ivr/menu', async (req, res) => {
 
 // Ask question flow
 async function askQuestion(callSid, req) {
+  const startTime = Date.now();
   console.log(`🎤 Starting recording for call: ${callSid}`);
+
+  // Emit pipeline event - STT starting
+  emitPipelineEvent('stt', 'active', { callSid });
+  emitNetworkEvent('POST', '/ivr/question', 200, Date.now() - startTime, { callSid });
+
   const session = userSessions.get(callSid) || {};
   session.state = 'recording_question';
+  session.sttStartTime = Date.now();
   userSessions.set(callSid, session);
 
   const twiml = new VoiceResponse();
@@ -175,10 +182,15 @@ function stopRecording(callSid, req) {
 
 // Handle recorded question
 app.post('/ivr/question-recorded', async (req, res) => {
+  const startTime = Date.now();
   const callSid = req.body.CallSid;
   const recordingUrl = req.body.RecordingUrl;
   console.log(`✅ Recording completed for call: ${callSid}`);
   console.log(`📼 Recording URL: ${recordingUrl}`);
+
+  // Emit pipeline event - STT processing
+  emitPipelineEvent('stt', 'processing', { callSid });
+  emitNetworkEvent('POST', '/ivr/question-recorded', 200, Date.now() - startTime, { callSid });
 
   const session = userSessions.get(callSid) || {};
   session.lastRecordingUrl = recordingUrl;
@@ -215,8 +227,13 @@ app.post('/ivr/question-recorded', async (req, res) => {
 
 // Process transcription asynchronously
 async function processTranscription(recordingUrl, callSid) {
+  const startTime = Date.now();
   try {
     const transcriptionText = await transcribeAudio(recordingUrl, callSid);
+
+    // Calculate and emit STT timing
+    const sttTime = Date.now() - startTime;
+    setStageTime('stt', sttTime);
 
     // Save transcription to session
     const session = userSessions.get(callSid) || {};
@@ -225,9 +242,14 @@ async function processTranscription(recordingUrl, callSid) {
     session.state = 'transcription_complete';
     userSessions.set(callSid, session);
 
-    console.log(`✅ Question saved to session for ${callSid}`);
+    // Emit pipeline event - STT complete
+    emitPipelineEvent('stt', 'complete', { callSid, duration: sttTime });
+    emitMetricsEvent();
+
+    console.log(`✅ Question saved to session for ${callSid} (${sttTime}ms)`);
   } catch (error) {
     console.error(`❌ Transcription error for ${callSid}:`, error.message);
+    emitPipelineEvent('stt', 'error', { callSid, error: error.message });
     // Set a fallback message
     const session = userSessions.get(callSid) || {};
     session.transcriptionError = true;
@@ -301,11 +323,20 @@ async function getAnswer(callSid, req) {
       { voice: 'Polly.Joanna', language: 'en-US' }
     );
 
+    // Emit LLM processing event
+    emitPipelineEvent('llm', 'processing', { callSid });
+    const llmStartTime = Date.now();
+
     console.log(`🤖 Sending to Gemini: ${question}`);
     const answer = await generateAnswer(question);
 
+    // Calculate and emit LLM timing
+    const llmTime = Date.now() - llmStartTime;
+    setStageTime('llm', llmTime);
+    emitPipelineEvent('llm', 'complete', { callSid, duration: llmTime });
+
     console.log(`🤖 Question: ${question}`);
-    console.log(`🤖 Answer: ${answer}`);
+    console.log(`🤖 Answer: ${answer} (${llmTime}ms)`);
 
     // Store answer in session
     session.lastAnswer = answer;
@@ -316,8 +347,18 @@ async function getAnswer(callSid, req) {
       await storeQuestionAndAnswer(session.fromNumber, question, answer);
     }
 
+    // Emit TTS processing event
+    emitPipelineEvent('tts', 'processing', { callSid });
+    const ttsStartTime = Date.now();
+
     // Convert answer to speech using Google TTS
     const audioFileName = await textToSpeechConvert(answer, callSid);
+
+    // Calculate and emit TTS timing
+    const ttsTime = Date.now() - ttsStartTime;
+    setStageTime('tts', ttsTime);
+    emitPipelineEvent('tts', 'complete', { callSid, duration: ttsTime });
+    console.log(`🔊 TTS complete (${ttsTime}ms)`);
 
     if (audioFileName) {
       // Play the generated audio
@@ -327,6 +368,10 @@ async function getAnswer(callSid, req) {
       // Fallback to Twilio's TTS
       twiml.say(answer, { voice: 'Polly.Joanna', language: 'en-US' });
     }
+
+    // Emit response delivered
+    emitPipelineEvent('response', 'active', { callSid });
+    emitMetricsEvent();
 
     // Offer next options
     const gather = twiml.gather({
@@ -343,6 +388,7 @@ async function getAnswer(callSid, req) {
 
   } catch (error) {
     console.error('Error getting answer from Gemini:', error);
+    emitPipelineEvent('llm', 'error', { callSid, error: error.message });
     twiml.say(
       'Sorry, I encountered an error processing your question. Please try again.',
       { voice: 'Polly.Joanna', language: 'en-US' }

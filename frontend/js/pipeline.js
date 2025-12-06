@@ -102,7 +102,8 @@ class PipelineController {
             'waiting': 'Waiting',
             'processing': 'Processing...',
             'active': 'Active',
-            'complete': 'Complete'
+            'complete': 'Complete',
+            'error': 'Error'
         };
         return statusMap[state] || 'Idle';
     }
@@ -133,6 +134,11 @@ class PipelineController {
 
     setStageComplete(stageId) {
         this.stageStates[stageId] = 'complete';
+        this.updateStageElement(stageId);
+    }
+
+    setStageError(stageId) {
+        this.stageStates[stageId] = 'error';
         this.updateStageElement(stageId);
     }
 
