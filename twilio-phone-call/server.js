@@ -58,7 +58,9 @@ const userSessions = new Map();
 app.post('/ivr/welcome', (req, res) => {
   const callSid = req.body.CallSid;
   const fromNumber = req.body.From;
-  console.log(`📞 Incoming call: ${callSid} from ${fromNumber}`);
+
+  // Track call start - emits pipeline, network, and metrics events
+  trackCallStart(callSid, fromNumber);
 
   // Initialize session
   userSessions.set(callSid, {
