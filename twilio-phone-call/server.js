@@ -17,8 +17,13 @@ const PORT = process.env.PORT || 3000;
 const WS_PORT = process.env.WS_PORT || 5050;
 
 // CORS middleware - allow dashboard requests
+// Use CORS_ORIGINS env var for production, fallback to localhost for development
+const corsOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',')
+  : ['http://localhost:8080', 'http://localhost:3000', 'http://127.0.0.1:3000'];
+
 app.use(cors({
-  origin: ['http://localhost:8080', 'http://localhost:3000', 'http://127.0.0.1:3000'],
+  origin: corsOrigins,
   methods: ['GET', 'POST', 'OPTIONS'],
   credentials: true
 }));

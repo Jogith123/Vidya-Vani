@@ -78,7 +78,9 @@ class LiveLogsController {
         }
 
         this.reconnectAttempts++;
-        const delay = this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts - 1);
+        // Exponential backoff with 30 second max cap
+        const maxDelay = 30000;
+        const delay = Math.min(this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts - 1), maxDelay);
 
         this.addLog(`Reconnecting in ${Math.round(delay / 1000)}s... (attempt ${this.reconnectAttempts})`, 'warning');
 
@@ -220,7 +222,7 @@ class LiveLogsController {
     startFlushInterval() {
         this.flushInterval = setInterval(() => {
             this.flushLogs();
-        }, 100); // Flush every 100ms for smooth updates
+        }, 250); // Flush every 250ms for better performance
     }
 
     flushLogs() {

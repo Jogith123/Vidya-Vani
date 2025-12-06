@@ -44,27 +44,43 @@ class NetworkController {
 
     /**
      * Make an actual API call and track it
+     * @param {string} endpoint - API endpoint
+     * @param {object} options - Fetch options
+     * @param {number} timeout - Timeout in ms (default: 30000)
      */
-    async fetch(endpoint, options = {}) {
+    async fetch(endpoint, options = {}, timeout = 30000) {
         const method = options.method || 'GET';
         const url = `${this.baseUrl}${endpoint}`;
         const startTime = performance.now();
 
+        // Create AbortController for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
+
         try {
             const response = await fetch(url, {
                 ...options,
+                signal: controller.signal,
                 headers: {
                     'Content-Type': 'application/json',
                     ...options.headers
                 }
             });
 
+            clearTimeout(timeoutId);
             const latency = Math.round(performance.now() - startTime);
             this.addCall(method, endpoint, response.status, latency);
 
             return response;
         } catch (error) {
+            clearTimeout(timeoutId);
             const latency = Math.round(performance.now() - startTime);
+
+            if (error.name === 'AbortError') {
+                this.addCall(method, endpoint, 408, latency); // 408 Request Timeout
+                throw new Error(`Request timeout after ${timeout}ms`);
+            }
+
             this.addCall(method, endpoint, 0, latency);
             throw error;
         }

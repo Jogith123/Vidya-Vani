@@ -18,6 +18,9 @@ class VoiceController {
         // Twilio Device (if integrated)
         this.twilioDevice = null;
         this.deviceStatus = 'idle';
+
+        // Register cleanup on page unload to prevent resource leaks
+        window.addEventListener('beforeunload', () => this.cleanup());
     }
 
     toggleMic() {

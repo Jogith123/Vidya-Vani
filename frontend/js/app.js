@@ -6,10 +6,12 @@
 
 class VidyaVaniDashboard {
     constructor() {
-        // Configuration
+        // Configuration - derive URLs from current location for production support
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsPort = 5050;
         this.config = {
-            wsUrl: 'ws://localhost:5050',
-            backendUrl: 'http://localhost:3000',
+            wsUrl: `${wsProtocol}//${window.location.hostname}:${wsPort}`,
+            backendUrl: window.location.origin,
             healthCheckInterval: 10000
         };
 
@@ -196,7 +198,7 @@ class VidyaVaniDashboard {
         this.elements.endCallBtn?.classList.remove('hidden');
         this.elements.statusDot?.classList.add('active');
         this.elements.statusDot?.classList.remove('inactive');
-        this.elements.statusText.textContent = 'Session Active';
+        if (this.elements.statusText) this.elements.statusText.textContent = 'Session Active';
 
         // Start timer
         this.startSessionTimer();
@@ -224,11 +226,11 @@ class VidyaVaniDashboard {
         this.elements.endCallBtn?.classList.add('hidden');
         this.elements.statusDot?.classList.remove('active');
         this.elements.statusDot?.classList.add('inactive');
-        this.elements.statusText.textContent = 'Ready to Start';
+        if (this.elements.statusText) this.elements.statusText.textContent = 'Ready to Start';
 
         // Stop timer
         this.stopSessionTimer();
-        this.elements.sessionTimer.textContent = '00:00';
+        if (this.elements.sessionTimer) this.elements.sessionTimer.textContent = '00:00';
 
         // Reset IVR
         this.ivr.endSession();
@@ -247,7 +249,7 @@ class VidyaVaniDashboard {
             const elapsed = Math.floor((Date.now() - this.sessionStartTime) / 1000);
             const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
             const seconds = (elapsed % 60).toString().padStart(2, '0');
-            this.elements.sessionTimer.textContent = `${minutes}:${seconds}`;
+            if (this.elements.sessionTimer) this.elements.sessionTimer.textContent = `${minutes}:${seconds}`;
         }, 1000);
     }
 
@@ -320,7 +322,7 @@ class VidyaVaniDashboard {
     updateBackendStatus(connected, data = null) {
         this.elements.backendIndicator?.classList.toggle('connected', connected);
         this.elements.backendIndicator?.classList.toggle('disconnected', !connected);
-        this.elements.backendStatus.textContent = connected ? 'Online' : 'Offline';
+        if (this.elements.backendStatus) this.elements.backendStatus.textContent = connected ? 'Online' : 'Offline';
 
         if (connected && data) {
             // Update metrics based on health data
@@ -340,26 +342,26 @@ class VidyaVaniDashboard {
         switch (state) {
             case 'recording':
                 this.elements.statusDot?.classList.add('processing');
-                this.elements.statusText.textContent = 'Recording...';
+                if (this.elements.statusText) this.elements.statusText.textContent = 'Recording...';
                 this.pipeline.setStageActive('stt');
                 break;
             case 'processing':
                 this.elements.statusDot?.classList.add('processing');
-                this.elements.statusText.textContent = 'Processing...';
+                if (this.elements.statusText) this.elements.statusText.textContent = 'Processing...';
                 this.pipeline.setStageActive('llm');
                 break;
             case 'speaking':
                 this.elements.statusDot?.classList.add('active');
-                this.elements.statusText.textContent = 'Speaking...';
+                if (this.elements.statusText) this.elements.statusText.textContent = 'Speaking...';
                 this.pipeline.setStageActive('tts');
                 break;
             case 'active':
                 this.elements.statusDot?.classList.add('active');
-                this.elements.statusText.textContent = 'Session Active';
+                if (this.elements.statusText) this.elements.statusText.textContent = 'Session Active';
                 break;
             default:
                 this.elements.statusDot?.classList.add('active');
-                this.elements.statusText.textContent = 'Session Active';
+                if (this.elements.statusText) this.elements.statusText.textContent = 'Session Active';
         }
     }
 
