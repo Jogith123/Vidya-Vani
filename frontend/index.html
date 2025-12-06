@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VidyaVani - Admin Dashboard</title>
+    <meta name="description"
+        content="VidyaVani AI-Powered Voice Learning Assistant - Admin Dashboard for monitoring live calls and system logs">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+
+<body>
+    <div class="dashboard">
+        <!-- Phone Simulator Panel (Left) -->
+        <aside class="phone-simulator">
+            <div class="phone-frame">
+                <!-- Status Bar -->
+                <div class="status-bar">
+                    <span class="time" id="phone-time">12:19</span>
+                    <div class="status-icons">
+                        <span class="icon-signal">📶</span>
+                        <span class="icon-battery">🔋</span>
+                    </div>
+                </div>
+
+                <!-- Session Status -->
+                <div class="session-status">
+                    <div class="status-indicator">
+                        <span class="status-dot" id="status-dot"></span>
+                        <span class="status-text" id="status-text">Ready to Start</span>
+                    </div>
+                    <span class="session-timer" id="session-timer">00:00</span>
+                </div>
+
+                <!-- App Content -->
+                <div class="app-content">
+                    <!-- Welcome Screen (shown when idle) -->
+                    <div class="welcome-screen" id="welcome-screen">
+                        <div class="app-logo">
+                            <span class="logo-icon">🎓</span>
+                        </div>
+                        <h1 class="app-title">VidyaVani</h1>
+                        <p class="app-subtitle">AI-Powered Voice Learning Assistant</p>
+                        <p class="app-info">Class 10 Science • English & Telugu</p>
+
+                        <button class="start-button" id="start-session-btn">
+                            <span class="btn-icon">📞</span>
+                            Start Learning Session
+                        </button>
+                    </div>
+
+                    <!-- Active Call Screen (shown during session) -->
+                    <div class="call-screen hidden" id="call-screen">
+                        <!-- Message Display -->
+                        <div class="message-display" id="message-display">
+                            <p class="ivr-message">Welcome to VidyaVani! Your AI-powered learning assistant for Class 10
+                                Science.</p>
+                            <p class="ivr-prompt">Please select your language:</p>
+                        </div>
+
+                        <!-- Language Selection -->
+                        <div class="language-selection" id="language-selection">
+                            <button class="lang-btn" data-lang="en" data-digit="1">
+                                <span class="lang-num">1</span>
+                                <span class="lang-name">English</span>
+                            </button>
+                            <button class="lang-btn" data-lang="te" data-digit="2">
+                                <span class="lang-num">2</span>
+                                <span class="lang-name">Telugu<br><small>(తెలుగు)</small></span>
+                            </button>
+                        </div>
+
+                        <!-- Dial Pad -->
+                        <div class="dial-pad" id="dial-pad">
+                            <button class="dial-key" data-digit="1"><span class="digit">1</span><span
+                                    class="letters"></span></button>
+                            <button class="dial-key" data-digit="2"><span class="digit">2</span><span
+                                    class="letters">ABC</span></button>
+                            <button class="dial-key" data-digit="3"><span class="digit">3</span><span
+                                    class="letters">DEF</span></button>
+                            <button class="dial-key" data-digit="4"><span class="digit">4</span><span
+                                    class="letters">GHI</span></button>
+                            <button class="dial-key" data-digit="5"><span class="digit">5</span><span
+                                    class="letters">JKL</span></button>
+                            <button class="dial-key" data-digit="6"><span class="digit">6</span><span
+                                    class="letters">MNO</span></button>
+                            <button class="dial-key" data-digit="7"><span class="digit">7</span><span
+                                    class="letters">PQRS</span></button>
+                            <button class="dial-key" data-digit="8"><span class="digit">8</span><span
+                                    class="letters">TUV</span></button>
+                            <button class="dial-key" data-digit="9"><span class="digit">9</span><span
+                                    class="letters">WXYZ</span></button>
+                            <button class="dial-key" data-digit="*"><span class="digit">*</span><span
+                                    class="letters"></span></button>
+                            <button class="dial-key" data-digit="0"><span class="digit">0</span><span
+                                    class="letters">+</span></button>
+                            <button class="dial-key" data-digit="#"><span class="digit">#</span><span
+                                    class="letters"></span></button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bottom Controls -->
+                <div class="phone-controls">
+                    <button class="control-btn" id="mic-btn" title="Toggle Microphone">
+                        <span class="control-icon">🎤</span>
+                    </button>
+                    <button class="control-btn end-call hidden" id="end-call-btn" title="End Call">
+                        <span class="control-icon">📵</span>
+                    </button>
+                    <button class="control-btn" id="speaker-btn" title="Toggle Speaker">
+                        <span class="control-icon">🔊</span>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Developer Console Panel (Right) -->
+        <main class="developer-console">
+            <div class="console-header">
+                <div class="console-title">
+                    <span class="console-icon">⚡</span>
+                    <h2>Developer Console</h2>
+                </div>
+                <button class="minimize-btn" id="minimize-console" title="Minimize">−</button>
+            </div>
+
+            <!-- Tab Navigation -->
+            <nav class="console-tabs">
+                <button class="tab-btn active" data-tab="pipeline">Pipeline</button>
+                <button class="tab-btn" data-tab="network">Network</button>
+                <button class="tab-btn" data-tab="metrics">Metrics</button>
+                <button class="tab-btn" data-tab="logs">Logs</button>
+            </nav>
+
+            <!-- Tab Content -->
+            <div class="console-content">
+                <!-- Pipeline Tab -->
+                <section class="tab-panel active" id="pipeline-panel">
+                    <div class="panel-header">
+                        <h3>AI Processing Pipeline</h3>
+                    </div>
+                    <div class="pipeline-container" id="pipeline-container">
+                        <!-- Pipeline stages will be rendered by pipeline.js -->
+                    </div>
+                </section>
+
+                <!-- Network Tab -->
+                <section class="tab-panel" id="network-panel">
+                    <div class="panel-header">
+                        <h3>API Calls</h3>
+                        <button class="clear-btn" id="clear-network">Clear</button>
+                    </div>
+                    <div class="network-list" id="network-list">
+                        <!-- Network calls will be rendered here -->
+                    </div>
+                </section>
+
+                <!-- Metrics Tab -->
+                <section class="tab-panel" id="metrics-panel">
+                    <div class="panel-header">
+                        <h3>Performance Metrics</h3>
+                    </div>
+                    <div class="metrics-grid" id="metrics-grid">
+                        <div class="metric-card">
+                            <span class="metric-label">Total Calls</span>
+                            <span class="metric-value" id="metric-total-calls">0</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">Active Sessions</span>
+                            <span class="metric-value" id="metric-active-sessions">0</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">Avg Latency</span>
+                            <span class="metric-value" id="metric-avg-latency">0ms</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">STT Accuracy</span>
+                            <span class="metric-value" id="metric-stt-accuracy">--</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">LLM Response Time</span>
+                            <span class="metric-value" id="metric-llm-time">0ms</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">TTS Duration</span>
+                            <span class="metric-value" id="metric-tts-duration">0ms</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Logs Tab -->
+                <section class="tab-panel" id="logs-panel">
+                    <div class="panel-header">
+                        <h3>System Logs</h3>
+                        <button class="clear-btn" id="clear-logs">Clear</button>
+                    </div>
+                    <div class="terminal" id="log-terminal">
+                        <div class="terminal-content" id="terminal-content">
+                            <!-- Log entries will be appended here -->
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Connection Status Footer -->
+            <footer class="console-footer">
+                <div class="connection-status">
+                    <span class="conn-indicator" id="ws-indicator"></span>
+                    <span class="conn-label">WebSocket:</span>
+                    <span class="conn-status" id="ws-status">Disconnected</span>
+                </div>
+                <div class="connection-status">
+                    <span class="conn-indicator" id="backend-indicator"></span>
+                    <span class="conn-label">Backend:</span>
+                    <span class="conn-status" id="backend-status">Checking...</span>
+                </div>
+            </footer>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/ivr.js"></script>
+    <script src="js/live_logs.js"></script>
+    <script src="js/network.js"></script>
+    <script src="js/pipeline.js"></script>
+    <script src="js/voice.js"></script>
+    <script src="js/app.js"></script>
+</body>
+
+</html>

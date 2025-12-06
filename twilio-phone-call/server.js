@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
+const cors = require('cors');
 const VoiceResponse = require('twilio').twiml.VoiceResponse;
 const path = require('path');
 
@@ -9,31 +10,44 @@ const { connectToMongoDB, closeConnection, isConnected } = require('./database/c
 const { initializeGemini, isInitialized: isGeminiInitialized, generateAnswer, generateSummary } = require('./services/geminiService');
 const { initializeTTS, initializeSTT, textToSpeechConvert, transcribeAudio } = require('./services/speechService');
 const { storeQuestionAndAnswer, getHistoryBySubject, getUserStats } = require('./services/historyService');
+const { initializeWebSocket, interceptConsole, getMetrics, trackCallStart, trackCallEnd, emitPipelineEvent } = require('./services/logService');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const WS_PORT = process.env.WS_PORT || 5050;
+
+// CORS middleware - allow dashboard requests
+app.use(cors({
+  origin: ['http://localhost:8080', 'http://localhost:3000', 'http://127.0.0.1:3000'],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  credentials: true
+}));
 
 // Middleware
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 app.use('/audio', express.static(path.join(__dirname, 'audio')));
 
+// Serve frontend dashboard
+app.use(express.static(path.join(__dirname, '../frontend')));
+
+
 // Initialize all services
 async function initializeServices() {
   console.log('🚀 Initializing Vidya Vani services...\n');
-  
+
   // Initialize Gemini AI
   initializeGemini();
-  
+
   // Initialize Google TTS
   initializeTTS();
-  
+
   // Initialize Google STT
   initializeSTT();
-  
+
   // Initialize MongoDB
   await connectToMongoDB();
-  
+
   console.log('\n✅ All services initialized\n');
 }
 
@@ -45,7 +59,7 @@ app.post('/ivr/welcome', (req, res) => {
   const callSid = req.body.CallSid;
   const fromNumber = req.body.From;
   console.log(`📞 Incoming call: ${callSid} from ${fromNumber}`);
-  
+
   // Initialize session
   userSessions.set(callSid, {
     questions: [],
@@ -117,7 +131,7 @@ async function askQuestion(callSid, req) {
   userSessions.set(callSid, session);
 
   const twiml = new VoiceResponse();
-  
+
   twiml.say(
     'Please ask your educational question after the beep. Press 2 to stop recording.',
     { voice: 'Polly.Joanna', language: 'en-US' }
@@ -138,7 +152,7 @@ async function askQuestion(callSid, req) {
 // Stop recording handler (when user presses 2)
 function stopRecording(callSid, req) {
   const twiml = new VoiceResponse();
-  
+
   twiml.say(
     'Recording stopped. Your question is being processed. Please press 3 to hear the answer.',
     { voice: 'Polly.Joanna', language: 'en-US' }
@@ -165,7 +179,7 @@ app.post('/ivr/question-recorded', async (req, res) => {
   const recordingUrl = req.body.RecordingUrl;
   console.log(`✅ Recording completed for call: ${callSid}`);
   console.log(`📼 Recording URL: ${recordingUrl}`);
-  
+
   const session = userSessions.get(callSid) || {};
   session.lastRecordingUrl = recordingUrl;
   session.state = 'processing_transcription';
@@ -203,14 +217,14 @@ app.post('/ivr/question-recorded', async (req, res) => {
 async function processTranscription(recordingUrl, callSid) {
   try {
     const transcriptionText = await transcribeAudio(recordingUrl, callSid);
-    
+
     // Save transcription to session
     const session = userSessions.get(callSid) || {};
     session.currentQuestion = transcriptionText;
     session.questions.push(transcriptionText);
     session.state = 'transcription_complete';
     userSessions.set(callSid, session);
-    
+
     console.log(`✅ Question saved to session for ${callSid}`);
   } catch (error) {
     console.error(`❌ Transcription error for ${callSid}:`, error.message);
@@ -225,9 +239,9 @@ async function processTranscription(recordingUrl, callSid) {
 app.post('/ivr/transcription', async (req, res) => {
   const callSid = req.body.CallSid;
   const transcriptionText = req.body.TranscriptionText;
-  
+
   console.log(`📝 Twilio transcription received for ${callSid}: "${transcriptionText}"`);
-  
+
   const session = userSessions.get(callSid) || {};
   // Only use Twilio transcription if Google STT hasn't already processed it
   if (!session.currentQuestion) {
@@ -410,12 +424,12 @@ app.post('/ivr/process-summary', async (req, res) => {
   try {
     // Transcribe the subject name
     let subjectName = 'Physics'; // Default fallback
-    
+
     if (recordingUrl) {
       try {
         const transcribedText = await transcribeAudio(recordingUrl, callSid);
         console.log(`📝 Subject name transcribed: "${transcribedText}"`);
-        
+
         // Extract just the subject name (remove phrases like "give me summary", "I want summary", etc.)
         subjectName = extractSubjectName(transcribedText);
         console.log(`📚 Extracted subject: "${subjectName}"`);
@@ -427,7 +441,7 @@ app.post('/ivr/process-summary', async (req, res) => {
     // Fetch last 5 questions for this subject (exclude summary requests)
     console.log(`🔍 Fetching history for subject: "${subjectName}" from user: ${fromNumber}`);
     const history = await getHistoryBySubject(fromNumber, subjectName, 5);
-    
+
     console.log(`📊 Found ${history.length} questions for "${subjectName}"`);
     if (history.length > 0) {
       console.log(`📋 First question: "${history[0].question.substring(0, 50)}..."`);
@@ -437,7 +451,7 @@ app.post('/ivr/process-summary', async (req, res) => {
       // Get all available subjects for this user
       const stats = await getUserStats(fromNumber);
       console.log(`📚 User's available subjects: ${stats.subjectStats.map(s => s._id).join(', ')}`);
-      
+
       twiml.say(
         `You have not asked any questions about ${subjectName} yet. Please ask some questions first, then request a summary.`,
         { voice: 'Polly.Joanna', language: 'en-US' }
@@ -508,9 +522,9 @@ function extractSubjectName(text) {
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/[.,!?;:]+$/g, '');  // Remove trailing punctuation
-  
+
   if (!cleanText) return 'Physics';
-  
+
   // Subject name mapping for common variations
   const subjectMapping = {
     'math': 'Mathematics',
@@ -544,20 +558,20 @@ function extractSubjectName(text) {
     'general knowledge': 'General Knowledge',
     'science': 'General Science'
   };
-  
+
   // Normalize by checking mapping first
   const normalized = subjectMapping[cleanText];
   if (normalized) {
     console.log(`🔄 Normalized "${text}" to "${normalized}"`);
     return normalized;
   }
-  
+
   // Capitalize first letter of each word if no mapping found
   const capitalized = cleanText
     .split(' ')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
-  
+
   console.log(`📚 Using capitalized: "${capitalized}"`);
   return capitalized;
 }
@@ -598,14 +612,35 @@ function redirectWelcome() {
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
+  const metrics = getMetrics();
+  res.json({
+    status: 'ok',
     timestamp: new Date().toISOString(),
     services: {
       gemini: isGeminiInitialized(),
       mongodb: isConnected()
+    },
+    metrics: {
+      totalCalls: metrics.totalCalls,
+      activeSessions: metrics.activeSessions,
+      uptime: metrics.uptime,
+      connectedClients: metrics.connectedClients
     }
   });
+});
+
+// API endpoint for active sessions
+app.get('/api/sessions', (req, res) => {
+  const sessions = [];
+  userSessions.forEach((session, callSid) => {
+    sessions.push({
+      callSid,
+      state: session.state,
+      fromNumber: session.fromNumber,
+      questionsCount: session.questions?.length || 0
+    });
+  });
+  res.json({ sessions, count: sessions.length });
 });
 
 // Error handler for all routes
@@ -626,10 +661,18 @@ process.on('SIGINT', async () => {
 
 // Start server
 async function startServer() {
+  // Initialize WebSocket server for dashboard
+  initializeWebSocket(WS_PORT);
+
+  // Intercept console.log to broadcast to dashboard
+  interceptConsole();
+
   await initializeServices();
-  
+
   app.listen(PORT, () => {
     console.log(`🚀 Server is running on port ${PORT}`);
+    console.log(`📡 Dashboard available at http://localhost:${PORT}`);
+    console.log(`📡 WebSocket server running on port ${WS_PORT}`);
     console.log(`📞 Twilio webhook URL: ${process.env.BASE_URL || `http://localhost:${PORT}`}/ivr/welcome`);
   });
 }
