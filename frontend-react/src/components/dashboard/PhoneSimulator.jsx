@@ -7,6 +7,8 @@ const PhoneSimulator = () => {
     const [activeCall, setActiveCall] = useState(false);
     const [dialedNumber, setDialedNumber] = useState('');
     const [callDuration, setCallDuration] = useState(0);
+    // TODO: isMuted and isSpeaker are visual indicators for now. 
+    // In a real implementation, these would control audio streams via WebRTC or Twilio SDK.
     const [isMuted, setIsMuted] = useState(false);
     const [isSpeaker, setIsSpeaker] = useState(false);
     const [callStatus, setCallStatus] = useState('Ready'); // Ready, Calling, Connected, Ended
@@ -59,7 +61,7 @@ const PhoneSimulator = () => {
             }
         } else {
             setCallStatus('Ending...');
-            try { await endCall.mutateAsync(); } catch (e) { }
+            try { await endCall.mutateAsync(); } catch (e) { console.error('End call error:', e); }
 
             setCallStatus('Ended');
             setTimeout(() => {
@@ -77,7 +79,7 @@ const PhoneSimulator = () => {
         } else {
             // Send DTMF
             console.log(`DTMF: ${digit}`);
-            try { await sendDtmf.mutateAsync(digit); } catch (e) { }
+            try { await sendDtmf.mutateAsync(digit); } catch (e) { console.error('DTMF send error:', e); }
         }
     };
 
@@ -172,7 +174,11 @@ const PhoneSimulator = () => {
                                         </div>
                                         <span className="text-[10px]">Mute</span>
                                     </button>
-                                    <button className="flex flex-col items-center gap-1 text-slate-400">
+                                    <button
+                                        onClick={() => console.log('Keypad toggle - TODO: Implement keypad overlay')}
+                                        aria-label="Toggle keypad"
+                                        className="flex flex-col items-center gap-1 text-slate-400"
+                                    >
                                         <div className="w-14 h-14 rounded-full bg-transparent border border-slate-600 flex items-center justify-center">
                                             <div className="grid grid-cols-3 gap-1 w-6">
                                                 {[...Array(9)].map((_, i) => <div key={i} className="w-1 h-1 bg-current rounded-full"></div>)}

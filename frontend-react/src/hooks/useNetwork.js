@@ -17,7 +17,8 @@ const useNetwork = (baseUrl = 'http://localhost:3000') => {
             });
 
             if (!response.ok) {
-                throw new Error(`Error: ${response.status}`);
+                const errorBody = await response.text().catch(() => 'No response body');
+                throw new Error(`POST ${endpoint} failed (${response.status}): ${errorBody.slice(0, 100)}`);
             }
 
             const result = await response.json();
@@ -37,7 +38,8 @@ const useNetwork = (baseUrl = 'http://localhost:3000') => {
         try {
             const response = await fetch(`${baseUrl}${endpoint}`);
             if (!response.ok) {
-                throw new Error(`Error: ${response.status}`);
+                const errorBody = await response.text().catch(() => 'No response body');
+                throw new Error(`GET ${endpoint} failed (${response.status}): ${errorBody.slice(0, 100)}`);
             }
             return await response.json();
         } catch (err) {

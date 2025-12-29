@@ -16,7 +16,8 @@ export const apiClient = async (endpoint, { method = 'GET', body, ...customConfi
     const response = await fetch(`${BASE_URL}${endpoint}`, config);
 
     if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
+        const errorBody = await response.text().catch(() => 'No response body');
+        throw new Error(`API Error: ${method} ${endpoint} failed (${response.status}): ${errorBody.slice(0, 100)}`);
     }
 
     return response.json();

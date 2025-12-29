@@ -1,4 +1,8 @@
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
+
+// Configuration constants
+const MAX_LOG_ENTRIES = 100;
+const WS_RECONNECT_DELAY_MS = 3000;
 
 const WebSocketContext = createContext({
     isConnected: false,
@@ -26,7 +30,7 @@ export const WebSocketProvider = ({ children }) => {
     const socketRef = useRef(null);
     const reconnectTimeoutRef = useRef(null);
 
-    const connect = () => {
+    const connect = useCallback(() => {
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         // const wsUrl = `${wsProtocol}//${window.location.hostname}:5050`;
         const wsUrl = `ws://localhost:5050`; // Hardcoded for local dev if needed, or derived
@@ -56,7 +60,7 @@ export const WebSocketProvider = ({ children }) => {
                 console.log('❌ WebSocket Disconnected');
                 setIsConnected(false);
                 // Reconnect logic
-                reconnectTimeoutRef.current = setTimeout(connect, 3000);
+                reconnectTimeoutRef.current = setTimeout(connect, WS_RECONNECT_DELAY_MS);
             };
 
             socket.onerror = (error) => {
@@ -66,7 +70,8 @@ export const WebSocketProvider = ({ children }) => {
         } catch (err) {
             console.error("WS Connection failed", err);
         }
-    };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     useEffect(() => {
         connect();
@@ -74,7 +79,7 @@ export const WebSocketProvider = ({ children }) => {
             if (socketRef.current) socketRef.current.close();
             if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
         };
-    }, []);
+    }, [connect]);
 
     const handleMessage = (data) => {
         // Handle specific event types
@@ -121,7 +126,7 @@ export const WebSocketProvider = ({ children }) => {
             source,
             message,
             type
-        }, ...prev].slice(0, 100)); // Keep last 100
+        }, ...prev].slice(0, MAX_LOG_ENTRIES)); // Keep last MAX_LOG_ENTRIES logs
     };
 
     const sendMessage = (msg) => {

@@ -1,28 +1,45 @@
 import React from 'react';
 import { Bell, Search, Sun, Moon, Database } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { useLocation } from 'react-router-dom';
 
 const Header = () => {
     const { theme, toggleTheme } = useTheme();
+    const location = useLocation();
+
+    // Dynamic page title based on current route
+    const getPageTitle = () => {
+        switch (location.pathname) {
+            case '/': return 'Dashboard Overview';
+            case '/calls': return 'Live Call Center';
+            case '/analytics': return 'Analytics Dashboard';
+            case '/content': return 'Content Library';
+            default: return 'VidyaVani';
+        }
+    };
 
     const handleFeatureClick = (feature) => {
-        // Simple feedback for now, could be improved with a toast library later
+        // TODO: Replace alert() with a proper toast notification library (e.g., react-hot-toast)
+        // for better UX in production.
         alert(`The ${feature} feature is coming in the next update!`);
     };
 
     return (
         <header className="h-20 bg-white/80 dark:bg-surface-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 sticky top-0 z-20 px-8 flex items-center justify-between transition-colors duration-300">
             <div className="flex items-center gap-4">
-                <h2 className="text-xl font-bold text-slate-800 dark:text-white">Dashboard Overview</h2>
+                <h2 className="text-xl font-bold text-slate-800 dark:text-white">{getPageTitle()}</h2>
             </div>
 
             <div className="flex items-center gap-6">
                 {/* Search */}
                 <div className="relative hidden md:block group">
+                    <label htmlFor="global-search" className="sr-only">Search analytics, logs...</label>
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
                     <input
+                        id="global-search"
                         type="text"
                         placeholder="Search analytics, logs..."
+                        aria-label="Search analytics and logs"
                         className="pl-10 pr-4 py-2 rounded-full bg-slate-100 dark:bg-slate-800 border-none focus:ring-2 focus:ring-primary/50 text-sm w-64 text-slate-700 dark:text-slate-200 transition-all"
                         onKeyDown={(e) => e.key === 'Enter' && handleFeatureClick('Global Search')}
                     />
