@@ -1,5 +1,12 @@
+/**
+ * ChartsSection Component
+ * Displays performance charts and subject popularity with animations.
+ */
+
 import React from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { motion } from 'framer-motion';
+import { containerVariants, cardVariants, transitions } from '../../lib/motion';
 
 const data = [
     { time: '10:00', latency: 400, calls: 24 },
@@ -19,11 +26,19 @@ const subjectData = [
     { subject: 'English', calls: 15 },
 ];
 
-const ChartsSection = () => {
+const ChartsSection = React.memo(() => {
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8"
+        >
             {/* Main Performance Chart */}
-            <div className="glass p-6 rounded-2xl lg:col-span-2">
+            <motion.div
+                variants={cardVariants}
+                className="glass p-6 rounded-2xl lg:col-span-2"
+            >
                 <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6">System Performance</h3>
                 <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
@@ -44,10 +59,13 @@ const ChartsSection = () => {
                         </AreaChart>
                     </ResponsiveContainer>
                 </div>
-            </div>
+            </motion.div>
 
             {/* Subject Distribution */}
-            <div className="glass p-6 rounded-2xl">
+            <motion.div
+                variants={cardVariants}
+                className="glass p-6 rounded-2xl"
+            >
                 <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6">Subject Popularity</h3>
                 <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
@@ -60,9 +78,12 @@ const ChartsSection = () => {
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
-            </div>
-        </div>
+            </motion.div>
+        </motion.div>
     );
-};
+});
+
+ChartsSection.displayName = 'ChartsSection';
 
 export default ChartsSection;
+

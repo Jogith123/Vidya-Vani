@@ -1,8 +1,14 @@
+/**
+ * MetricCard Component
+ * Displays a single metric with icon, value, trend indicator, and animations.
+ */
+
 import React from 'react';
 import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { cardVariants, cardHover, transitions } from '../../lib/motion';
 
-const MetricCard = ({ title, value, trend, suffix = '', icon: Icon, color = 'primary' }) => {
+const MetricCard = React.memo(({ title, value, trend, suffix = '', icon: Icon, color = 'primary' }) => {
     const isPositive = trend > 0;
 
     const colorMap = {
@@ -16,9 +22,12 @@ const MetricCard = ({ title, value, trend, suffix = '', icon: Icon, color = 'pri
 
     return (
         <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="glass p-6 rounded-2xl relative overflow-hidden"
+            variants={cardVariants}
+            initial="hidden"
+            animate="visible"
+            whileHover={cardHover}
+            transition={transitions.default}
+            className="glass p-6 rounded-2xl relative overflow-hidden cursor-pointer"
         >
             <div className="flex justify-between items-start mb-4">
                 <div>
@@ -32,7 +41,7 @@ const MetricCard = ({ title, value, trend, suffix = '', icon: Icon, color = 'pri
                 </div>
             </div>
 
-            {trend && (
+            {trend !== undefined && trend !== null && (
                 <div className="flex items-center gap-2 text-sm">
                     <span className={`flex items-center font-bold ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
                         {isPositive ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
@@ -48,6 +57,9 @@ const MetricCard = ({ title, value, trend, suffix = '', icon: Icon, color = 'pri
             </div>
         </motion.div>
     );
-};
+});
+
+MetricCard.displayName = 'MetricCard';
 
 export default MetricCard;
+
