@@ -11,7 +11,6 @@ const Sidebar = () => {
         { icon: Phone, label: 'Live Calls', path: '/calls' },
         { icon: BarChart3, label: 'Analytics', path: '/analytics' },
         { icon: BookOpen, label: 'Content Library', path: '/content' },
-        { icon: Settings, label: 'Settings', path: '/settings' },
     ];
 
     return (
@@ -44,8 +43,8 @@ const Sidebar = () => {
                             key={item.label}
                             onClick={() => navigate(item.path)}
                             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 group ${isActive
-                                    ? 'bg-primary text-white shadow-lg shadow-primary/25'
-                                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                                ? 'bg-primary text-white shadow-lg shadow-primary/25'
+                                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
                                 }`}
                         >
                             <item.icon

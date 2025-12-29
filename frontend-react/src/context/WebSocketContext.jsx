@@ -4,6 +4,7 @@ const WebSocketContext = createContext({
     isConnected: false,
     logs: [],
     pipelineState: {},
+    metrics: {},
     sendMessage: () => { },
     clearLogs: () => { },
 });
@@ -14,6 +15,14 @@ export const WebSocketProvider = ({ children }) => {
     const [isConnected, setIsConnected] = useState(false);
     const [logs, setLogs] = useState([]);
     const [pipelineState, setPipelineState] = useState({});
+    const [metrics, setMetrics] = useState({
+        totalCalls: 0,
+        activeSessions: 0,
+        avgLatency: 0,
+        sttTime: 0,
+        llmTime: 0,
+        ttsTime: 0
+    });
     const socketRef = useRef(null);
     const reconnectTimeoutRef = useRef(null);
 
@@ -72,15 +81,36 @@ export const WebSocketProvider = ({ children }) => {
         if (data.type === 'log') {
             addLog('Backend', data.message, data.level || 'info');
         }
+        else if (data.type === 'pipeline') {
+            // Backend sends { type: 'pipeline', stage: 'stt', status: 'active' }
+            if (data.status === 'active' || data.status === 'processing') {
+                setPipelineState(prev => ({ ...prev, activeStage: data.stage }));
+            }
+            addLog('Pipeline', `Stage: ${data.stage} (${data.status})`, 'info');
+        }
+        else if (data.type === 'metrics') {
+            // Backend sends real-time metrics
+            setMetrics({
+                totalCalls: data.totalCalls || 0,
+                activeSessions: data.activeSessions || 0,
+                avgLatency: data.avgLatency || 0,
+                sttTime: data.sttTime || 0,
+                llmTime: data.llmTime || 0,
+                ttsTime: data.ttsTime || 0
+            });
+        }
         else if (data.event) {
-            // Pipeline events
-            setPipelineState(prev => ({ ...prev, activeStage: data.event }));
-            addLog('Pipeline', `Stage Update: ${data.event}`, 'info');
+            // Legacy/Broadcast events (call_start, etc.)
+            addLog('System', `Event: ${data.event}`, 'info');
+        }
+        else if (data.message) {
+            // Standard log message from broadcast()
+            addLog('Server', data.message, data.level || 'info');
         }
         else {
-            // Generic log
+            // Generic fallback
             const msg = typeof data === 'string' ? data : JSON.stringify(data);
-            addLog('Server', msg);
+            addLog('Debug', msg, 'error');
         }
     };
 
@@ -103,7 +133,7 @@ export const WebSocketProvider = ({ children }) => {
     const clearLogs = () => setLogs([]);
 
     return (
-        <WebSocketContext.Provider value={{ isConnected, logs, pipelineState, sendMessage, clearLogs }}>
+        <WebSocketContext.Provider value={{ isConnected, logs, pipelineState, metrics, sendMessage, clearLogs }}>
             {children}
         </WebSocketContext.Provider>
     );

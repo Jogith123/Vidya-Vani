@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Phone, PhoneOff, Mic, MicOff, Volume2, VolumeX, Delete } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import useNetwork from '../../hooks/useNetwork';
+import { useCallSession } from '../../hooks/api/useCallSession';
 
 const PhoneSimulator = () => {
     const [activeCall, setActiveCall] = useState(false);
@@ -11,7 +11,7 @@ const PhoneSimulator = () => {
     const [isSpeaker, setIsSpeaker] = useState(false);
     const [callStatus, setCallStatus] = useState('Ready'); // Ready, Calling, Connected, Ended
 
-    const { post } = useNetwork();
+    const { startCall, endCall, sendDtmf } = useCallSession();
 
     // Timer logic
     useEffect(() => {
@@ -46,7 +46,11 @@ const PhoneSimulator = () => {
                 setTimeout(async () => {
                     setCallStatus('Connected');
                     // Fire and forget real call
-                    try { await post('/api/session/create', { phoneNumber: dialedNumber }); } catch (e) { console.log('Mock: Backend call failed but proceeding in demo mode'); }
+                    try {
+                        await startCall.mutateAsync(dialedNumber);
+                    } catch (e) {
+                        console.log('Mock: Backend call failed but proceeding in demo mode');
+                    }
                 }, 1500);
 
             } catch (err) {
@@ -55,7 +59,7 @@ const PhoneSimulator = () => {
             }
         } else {
             setCallStatus('Ending...');
-            try { await post('/api/session/end', {}); } catch (e) { }
+            try { await endCall.mutateAsync(); } catch (e) { }
 
             setCallStatus('Ended');
             setTimeout(() => {
@@ -73,7 +77,7 @@ const PhoneSimulator = () => {
         } else {
             // Send DTMF
             console.log(`DTMF: ${digit}`);
-            try { await post(`/ivr/menu?digit=${digit}`, {}); } catch (e) { }
+            try { await sendDtmf.mutateAsync(digit); } catch (e) { }
         }
     };
 

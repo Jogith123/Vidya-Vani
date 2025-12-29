@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import DashboardLayout from './components/layout/DashboardLayout';
 import Dashboard from './pages/Dashboard';
 import LiveCalls from './pages/LiveCalls';
+import Analytics from './pages/Analytics';
 import PlaceholderPage from './pages/PlaceholderPage';
 import { ThemeProvider } from './context/ThemeContext';
 import { WebSocketProvider } from './context/WebSocketContext';
@@ -20,9 +21,8 @@ function App() {
               <Routes>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/calls" element={<LiveCalls />} />
-                <Route path="/analytics" element={<PlaceholderPage title="Analytics Module" />} />
+                <Route path="/analytics" element={<Analytics />} />
                 <Route path="/content" element={<PlaceholderPage title="Content Library" />} />
-                <Route path="/settings" element={<PlaceholderPage title="System Settings" />} />
 
                 {/* Fallback */}
                 <Route path="*" element={<Navigate to="/" replace />} />

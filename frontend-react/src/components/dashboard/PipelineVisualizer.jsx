@@ -11,15 +11,17 @@ const stages = [
     { id: 'delivery', label: 'Delivery', icon: Send, color: 'text-teal-500' },
 ];
 
+import { useWebSocket } from '../../context/WebSocketContext';
+
 const PipelineVisualizer = () => {
-    // Mock active stage for now, will be connected to store later
+    const { pipelineState } = useWebSocket();
     const [activeStage, setActiveStage] = useState(null);
 
-    // Simulation effect for demo purposes (remove when real data connected)
     useEffect(() => {
-        // Only run if specifically in demo mode or for testing visual
-        // For now we render static or idle state
-    }, []);
+        if (pipelineState?.activeStage) {
+            setActiveStage(pipelineState.activeStage);
+        }
+    }, [pipelineState]);
 
     return (
         <div className="glass p-6 rounded-2xl mb-8">
@@ -55,8 +57,8 @@ const PipelineVisualizer = () => {
                             <div key={stage.id} className="flex flex-col items-center gap-3">
                                 <motion.div
                                     className={`w-12 h-12 rounded-full flex items-center justify-center border-4 transition-colors duration-300 bg-white dark:bg-surface-dark ${isActive || isPast
-                                            ? 'border-primary shadow-lg shadow-primary/20'
-                                            : 'border-slate-200 dark:border-slate-700'
+                                        ? 'border-primary shadow-lg shadow-primary/20'
+                                        : 'border-slate-200 dark:border-slate-700'
                                         }`}
                                     animate={{
                                         scale: isActive ? 1.1 : 1,
