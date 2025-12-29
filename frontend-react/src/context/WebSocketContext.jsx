@@ -64,7 +64,7 @@ export const WebSocketProvider = ({ children }) => {
                 setIsConnected(false);
             };
         } catch (err) {
-            console.error("WS Connection failed", err)
+            console.error("WS Connection failed", err);
         }
     };
 
