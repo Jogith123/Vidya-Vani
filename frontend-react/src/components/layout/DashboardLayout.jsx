@@ -2,8 +2,11 @@ import React from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { Toaster } from 'react-hot-toast';
+import { useWebSocket } from '../../context/WebSocketContext';
 
 const DashboardLayout = ({ children }) => {
+    const { metrics, isConnected } = useWebSocket();
+
     return (
         <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans flex text-slate-900 dark:text-slate-50 transition-colors duration-300">
             <Toaster
@@ -30,11 +33,11 @@ const DashboardLayout = ({ children }) => {
                         <span>&copy; {new Date().getFullYear()} VidyaVani AI Systems. All rights reserved.</span>
                         <div className="flex items-center gap-4">
                             <span className="flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                                API Operational
+                                <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-orange-500'}`} />
+                                {isConnected ? 'API Operational' : 'Connecting...'}
                             </span>
                             <span className="text-slate-300 dark:text-slate-700">|</span>
-                            <span>Latency: 24ms</span>
+                            <span>Latency: {metrics?.avgLatency || '--'}ms</span>
                         </div>
                     </div>
                 </footer>
@@ -44,4 +47,5 @@ const DashboardLayout = ({ children }) => {
 };
 
 export default DashboardLayout;
+
 

@@ -51,7 +51,7 @@ const PipelineVisualizer = React.memo(() => {
                     Live Processing Pipeline
                 </h3>
                 <span className="text-xs font-mono text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">
-                    ID: #8472-A
+                    ID: #{pipelineState?.sessionId || 'IDLE'}
                 </span>
             </div>
 
@@ -99,8 +99,8 @@ const StageNode = React.memo(({ stage, isActive, isPast }) => {
                 variants={stageVariants}
                 animate={isActive ? 'active' : isPast ? 'complete' : 'idle'}
                 className={`w-12 h-12 rounded-full flex items-center justify-center border-4 bg-white dark:bg-surface-dark transition-colors duration-300 ${isActive || isPast
-                        ? 'border-primary shadow-lg shadow-primary/20'
-                        : 'border-slate-200 dark:border-slate-700'
+                    ? 'border-primary shadow-lg shadow-primary/20'
+                    : 'border-slate-200 dark:border-slate-700'
                     }`}
             >
                 <Icon

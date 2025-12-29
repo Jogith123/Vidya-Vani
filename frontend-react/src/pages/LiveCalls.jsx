@@ -15,7 +15,7 @@ import Terminal from '../components/dashboard/Terminal';
 import { useSystemStatus } from '../hooks/api/useSystemStatus';
 
 // Motion presets
-import { containerVariants, cardVariants, transitions } from '../lib/motion';
+import { containerVariants, cardVariants } from '../lib/motion';
 
 const LiveCalls = () => {
     const { data: status } = useSystemStatus();

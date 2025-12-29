@@ -18,7 +18,13 @@ const Terminal = () => {
                     <span className="font-semibold">System Output</span>
                 </div>
                 <div className="flex gap-2">
-                    <button onClick={clearLogs} className="hover:text-white text-slate-500 transition-colors">Clear</button>
+                    <button
+                        onClick={clearLogs}
+                        aria-label="Clear log entries"
+                        className="hover:text-white text-slate-500 transition-colors"
+                    >
+                        Clear
+                    </button>
                 </div>
             </div>
 
@@ -30,9 +36,9 @@ const Terminal = () => {
                     <div key={log.id} className="flex gap-2 hover:bg-white/5 px-2 -mx-2 rounded transition-colors">
                         <span className="text-slate-500 min-w-[80px]">{log.timestamp}</span>
                         <span className={`font-bold min-w-[70px] ${log.type === 'error' ? 'text-red-400' :
-                                log.type === 'success' ? 'text-green-400' :
-                                    log.type === 'warning' ? 'text-yellow-400' :
-                                        'text-blue-400'
+                            log.type === 'success' ? 'text-green-400' :
+                                log.type === 'warning' ? 'text-yellow-400' :
+                                    'text-blue-400'
                             }`}>[{log.source}]</span>
                         <span className="text-slate-300 break-all">{log.message}</span>
                     </div>

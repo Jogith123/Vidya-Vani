@@ -63,8 +63,8 @@ const Sidebar = () => {
                             whileTap={buttonTap}
                             transition={transitions.fast}
                             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors duration-200 group ${isActive
-                                    ? 'bg-primary text-white shadow-lg shadow-primary/25'
-                                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                                ? 'bg-primary text-white shadow-lg shadow-primary/25'
+                                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
                                 }`}
                         >
                             <item.icon
@@ -95,7 +95,9 @@ const Sidebar = () => {
                         </div>
                         <div>
                             <p className="text-xs font-bold text-slate-800 dark:text-white">Pro Plan</p>
-                            <p className="text-[10px] text-slate-500">Valid until Dec 2025</p>
+                            <p className="text-[10px] text-slate-500">
+                                Valid until {new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                            </p>
                         </div>
                     </div>
                     <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
