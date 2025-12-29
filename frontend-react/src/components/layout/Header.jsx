@@ -2,6 +2,7 @@ import React from 'react';
 import { Bell, Search, Sun, Moon, Database } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useLocation } from 'react-router-dom';
+import toast from 'react-hot-toast';
 
 const Header = () => {
     const { theme, toggleTheme } = useTheme();
@@ -19,9 +20,10 @@ const Header = () => {
     };
 
     const handleFeatureClick = (feature) => {
-        // TODO: Replace alert() with a proper toast notification library (e.g., react-hot-toast)
-        // for better UX in production.
-        alert(`The ${feature} feature is coming in the next update!`);
+        toast(`${feature} feature is coming soon!`, {
+            icon: '🚀',
+            duration: 3000,
+        });
     };
 
     return (
